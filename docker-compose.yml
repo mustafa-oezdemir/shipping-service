@@ -1,0 +1,40 @@
+services:
+  shipping-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-shipping}
+      MYSQL_USER: ${MYSQL_USER:-shipping}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - shipping_mysql:/var/lib/mysql
+
+  shipping-app:
+    build: .
+    depends_on:
+      shipping-db:
+        condition: service_healthy
+    environment:
+      APP_PORT: 8090
+      DATABASE_DSN: ${DATABASE_DSN_DOCKER:-shipping:${MYSQL_PASSWORD}@tcp(shipping-db:3306)/shipping?charset=utf8mb4&parseTime=True&loc=UTC}
+      ECOMMERCE_SERVICE_TOKEN: ${ECOMMERCE_SERVICE_TOKEN:?set ECOMMERCE_SERVICE_TOKEN in .env}
+      INTERNAL_QR_SECRET: ${INTERNAL_QR_SECRET:?set INTERNAL_QR_SECRET in .env}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8090}
+      ECOMMERCE_CALLBACK_URL: ${ECOMMERCE_CALLBACK_URL:-}
+      WAREHOUSE_NAME: ${WAREHOUSE_NAME:-NordShop Logistics Center}
+      WAREHOUSE_COMPANY: ${WAREHOUSE_COMPANY:-NordShop GmbH}
+      WAREHOUSE_STREET: ${WAREHOUSE_STREET:-Musterstrasse}
+      WAREHOUSE_HOUSE_NUMBER: ${WAREHOUSE_HOUSE_NUMBER:-10}
+      WAREHOUSE_POSTAL_CODE: ${WAREHOUSE_POSTAL_CODE:-35039}
+      WAREHOUSE_CITY: ${WAREHOUSE_CITY:-Marburg}
+      WAREHOUSE_COUNTRY: ${WAREHOUSE_COUNTRY:-DE}
+    ports:
+      - "${APP_PORT:-8090}:8090"
+
+volumes:
+  shipping_mysql:
