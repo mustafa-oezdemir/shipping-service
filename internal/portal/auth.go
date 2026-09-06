@@ -41,6 +41,7 @@ func (manager *SessionManager) Start(c *gin.Context, user *models.User) error {
 	if err := manager.db.WithContext(c.Request.Context()).Create(&session).Error; err != nil {
 		return err
 	}
+	// #nosec G124 -- Secure is mandatory in production and intentionally false for HTTP localhost development.
 	http.SetCookie(c.Writer, &http.Cookie{Name: "shipping_session", Value: token, Path: "/", MaxAge: int(manager.ttl.Seconds()), HttpOnly: true, Secure: manager.secure, SameSite: http.SameSiteLaxMode})
 	return nil
 }
@@ -49,6 +50,7 @@ func (manager *SessionManager) Destroy(c *gin.Context) {
 	if cookie, err := c.Cookie("shipping_session"); err == nil && cookie != "" {
 		_ = manager.db.WithContext(c.Request.Context()).Delete(&models.BrowserSession{}, "token_hash = ?", hashToken(cookie)).Error
 	}
+	// #nosec G124 -- Secure is mandatory in production and intentionally false for HTTP localhost development.
 	http.SetCookie(c.Writer, &http.Cookie{Name: "shipping_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: manager.secure, SameSite: http.SameSiteLaxMode})
 }
 

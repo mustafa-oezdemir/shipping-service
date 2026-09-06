@@ -4,13 +4,36 @@ An independent Go/Gin logistics service for NordShop. It owns shipment tracking,
 
 ## E-Commerce ↔ Shipping architecture
 
+```mermaid
+flowchart LR
+    Customer[Customer browser] --> Ecommerce[ecommerce-gin]
+    Staff[Shipping admin / employee browser] --> Portal[Shipping personnel portal]
+    Ecommerce --> EcommerceDB[(E-Commerce DB)]
+    Ecommerce <-->|REST / JSON + Bearer token| Shipping[shipping-service]
+    Portal --> Shipping
+    Shipping --> ShippingDB[(Shipping DB)]
+```
+
 - `ecommerce-gin` remains the source of truth for orders, customers, payments, refunds, and return authorization rules.
 - `shipping-service` owns shipment records, immutable sender/recipient snapshots, tracking numbers, delivery lifecycle state, timeline events, audit logs, and the ecommerce callback outbox.
 - The integration is HTTP-only. No shared database tables, ORM models, or direct database imports are required or allowed.
 - Shipment/return creation is idempotent via `Idempotency-Key`, shipping-side business keys, and database uniqueness constraints.
 - Versioned migrations are applied through `schema_migrations`; runtime code no longer relies on `AutoMigrate`.
 
-## Authentication and request headers
+## Authentication
+
+Two deliberately independent authentication boundaries are used:
+
+- Human personnel use email/password at `/login` and an opaque, database-backed `HttpOnly`, `SameSite=Lax` session cookie. Production cookies are `Secure`. All portal mutations require a session-bound CSRF token.
+- Service-to-service `/api/v1/*` calls continue to use `Authorization: Bearer <token>` and never accept the browser session as a substitute.
+
+Portal roles are `admin` and `employee`. Admin routes under `/admin/*` are enforced server-side. Disabling an account, changing its role, or changing its password invalidates its existing sessions.
+
+Employees can use the dashboard, shipment/return lists and details, authenticated QR scanner, lifecycle transitions, remaining-stop updates, profile image, and password change. Administrators additionally get cross-operation dashboards, personnel creation/edit/activation/role management, shipment overview, audit search, and employee activity summaries.
+
+The first administrator can be created at startup with `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD`; remove both values after the first successful deployment. The password is hashed with bcrypt and is never stored in source code.
+
+### Internal API authentication and request headers
 
 All `/api/v1/*` endpoints require `Authorization: Bearer <token>`.
 
@@ -114,6 +137,10 @@ Each accepted status/ETA/stops/event mutation writes:
 | `ECOMMERCE_PUBLIC_URL` | Browser-reachable E-Commerce origin |
 | `SHIPPING_TO_ECOMMERCE_TOKEN` | Outbound callback bearer token |
 | `INTERNAL_QR_SECRET` | Reserved secret for future signed internal QR flows |
+| `SESSION_SECRET` | At least 32 characters; derives session-bound CSRF tokens |
+| `SESSION_TTL` | Personnel session lifetime (default `12h`) |
+| `PROFILE_IMAGE_DIRECTORY` | Persistent sanitized profile-image storage |
+| `INITIAL_ADMIN_*` | Optional first-start administrator bootstrap; remove after use |
 | `PUBLIC_BASE_URL` | Deprecated compatibility alias for `APP_URL` |
 | `OUTBOX_POLL_INTERVAL` | Dispatcher poll interval |
 | `OUTBOX_RETRY_BASE_DELAY` | Base retry backoff |
@@ -148,7 +175,21 @@ Use the sibling `ecommerce-gin/scripts/New-ProductionEnv.ps1` generator to creat
 ## Verification commands
 
 ```bash
-go test ./internal/...
-go build ./cmd/server
+test -z "$(gofmt -l .)"
+go vet ./...
+go test ./...
+go test -race ./...
+go build ./...
 docker compose config
 ```
+
+The sibling E-Commerce integration stack is started from `ecommerce-gin` with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.integration.yml up --build -d
+```
+
+## Known limitations
+
+- Live SMTP/payment-provider behavior belongs to E-Commerce and requires external credentials or sandbox accounts.
+- Public production TLS requires DNS A/AAAA records for both domains and inbound ports 80/443 to the Caddy host.

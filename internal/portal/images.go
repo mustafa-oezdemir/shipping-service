@@ -97,11 +97,20 @@ func (store *ImageStore) Open(filename string) (*os.File, error) {
 	if !imageNamePattern.MatchString(filename) {
 		return nil, os.ErrNotExist
 	}
-	return os.Open(filepath.Join(store.directory, filename))
+	root, err := os.OpenRoot(store.directory)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	return root.Open(filename)
 }
 
 func (store *ImageStore) Delete(filename string) {
 	if imageNamePattern.MatchString(filename) {
-		_ = os.Remove(filepath.Join(store.directory, filename))
+		root, err := os.OpenRoot(store.directory)
+		if err == nil {
+			defer root.Close()
+			_ = root.Remove(filename)
+		}
 	}
 }

@@ -102,6 +102,7 @@ func (h *Handler) Register(router *gin.Engine) {
 
 func (h *Handler) ShowLogin(c *gin.Context) {
 	token, _ := randomHex(24)
+	// #nosec G124 -- Secure is mandatory in production and intentionally false for HTTP localhost development.
 	http.SetCookie(c.Writer, &http.Cookie{Name: "shipping_login_csrf", Value: token, Path: "/login", MaxAge: 600, HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode})
 	c.HTML(http.StatusOK, "login.tmpl", gin.H{"CSRF": token})
 }
@@ -140,6 +141,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	h.limiter.Reset(key)
+	// #nosec G124 -- Secure is mandatory in production and intentionally false for HTTP localhost development.
 	http.SetCookie(c.Writer, &http.Cookie{Name: "shipping_login_csrf", Value: "", Path: "/login", MaxAge: -1, HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode})
 	h.audit(c, &user.ID, "login", "user", strconv.Itoa(int(user.ID)), "", "")
 	if user.Role == models.RoleAdmin {
