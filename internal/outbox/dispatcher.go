@@ -90,7 +90,6 @@ func (dispatcher *Dispatcher) DeliverDue(ctx context.Context) error {
 			return err
 		}
 	}
-	appmetrics.RefreshOutbox(ctx, dispatcher.database)
 	return nil
 }
 
@@ -129,9 +128,15 @@ func (dispatcher *Dispatcher) claimDueEvents(ctx context.Context, limit int) ([]
 }
 
 func (dispatcher *Dispatcher) deliverOne(ctx context.Context, event models.OutboxEvent) error {
-	appmetrics.Callbacks.Inc()
+	started := time.Now()
+	defer func() {
+		if metrics := appmetrics.Default(); metrics != nil {
+			metrics.CallbackDuration.Observe(time.Since(started).Seconds())
+		}
+	}()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, dispatcher.callbackURL, bytes.NewBufferString(event.Payload))
 	if err != nil {
+		recordCallbackResult("client_error")
 		return dispatcher.markRetry(ctx, event, fmt.Errorf("build callback request: %w", err), false)
 	}
 	request.Header.Set("Authorization", "Bearer "+dispatcher.callbackToken)
@@ -143,22 +148,39 @@ func (dispatcher *Dispatcher) deliverOne(ctx context.Context, event models.Outbo
 	}
 	response, err := dispatcher.client.Do(request)
 	if err != nil {
-		appmetrics.CallbackFailures.Inc()
+		result := "network_error"
+		if isTimeoutError(err) {
+			result = "timeout"
+		}
+		recordCallbackResult(result)
 		return dispatcher.markRetry(ctx, event, err, isTemporaryError(err))
 	}
 	defer response.Body.Close()
 	_, _ = io.Copy(io.Discard, response.Body)
 	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+		recordCallbackResult("success")
 		return dispatcher.markDelivered(ctx, event)
 	}
 	permanent := response.StatusCode == http.StatusBadRequest || response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusUnprocessableEntity
-	appmetrics.CallbackFailures.Inc()
+	result := "client_error"
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		result = "unauthorized"
+	} else if response.StatusCode >= http.StatusInternalServerError {
+		result = "server_error"
+	}
+	recordCallbackResult(result)
 	return dispatcher.markRetry(ctx, event, fmt.Errorf("callback returned %d", response.StatusCode), !permanent)
 }
 
 func (dispatcher *Dispatcher) markDelivered(ctx context.Context, event models.OutboxEvent) error {
 	now := time.Now().UTC()
-	return dispatcher.database.WithContext(ctx).Model(&models.OutboxEvent{}).Where("id = ?", event.ID).Updates(map[string]any{"status": models.OutboxStatusDelivered, "delivered_at": &now, "last_error": "", "next_attempt_at": now}).Error
+	err := dispatcher.database.WithContext(ctx).Model(&models.OutboxEvent{}).Where("id = ?", event.ID).Updates(map[string]any{"status": models.OutboxStatusDelivered, "delivered_at": &now, "last_error": "", "next_attempt_at": now}).Error
+	if err == nil {
+		if metrics := appmetrics.Default(); metrics != nil {
+			metrics.OutboxDelivered.Inc()
+		}
+	}
+	return err
 }
 
 func (dispatcher *Dispatcher) markRetry(ctx context.Context, event models.OutboxEvent, err error, retryable bool) error {
@@ -168,10 +190,31 @@ func (dispatcher *Dispatcher) markRetry(ctx context.Context, event models.Outbox
 		status = models.OutboxStatusPending
 		nextAttemptAt = nextAttemptAt.Add(backoffDelay(dispatcher.retryBaseDelay, event.Attempts))
 	}
+	if status == models.OutboxStatusPending {
+		if metrics := appmetrics.Default(); metrics != nil {
+			metrics.OutboxRetries.Inc()
+		}
+	}
 	if !retryable {
 		status = models.OutboxStatusFailed
 	}
 	return dispatcher.database.WithContext(ctx).Model(&models.OutboxEvent{}).Where("id = ?", event.ID).Updates(map[string]any{"status": status, "last_error": truncateError(err), "next_attempt_at": nextAttemptAt}).Error
+}
+
+func recordCallbackResult(result string) {
+	if metrics := appmetrics.Default(); metrics != nil {
+		metrics.CallbackRequests.WithLabelValues(result).Inc()
+		if result == "success" {
+			metrics.EcommerceDependencyUp.Set(1)
+		} else {
+			metrics.EcommerceDependencyUp.Set(0)
+		}
+	}
+}
+
+func isTimeoutError(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func backoffDelay(base time.Duration, attempts int) time.Duration {

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mustafa-oezdemir/shipping-service/internal/config"
+	appmetrics "github.com/mustafa-oezdemir/shipping-service/internal/metrics"
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -93,13 +94,18 @@ type EstimatedDeliveryData struct {
 type ShipmentService struct {
 	database  *gorm.DB
 	warehouse config.Warehouse
+	metrics   *appmetrics.Metrics
 }
 
-func NewShipmentService(database *gorm.DB, warehouse config.Warehouse) *ShipmentService {
+func NewShipmentService(database *gorm.DB, warehouse config.Warehouse, metrics ...*appmetrics.Metrics) *ShipmentService {
 	if database == nil {
 		panic("shipping: database is required")
 	}
-	return &ShipmentService{database: database, warehouse: warehouse}
+	var instrumentation *appmetrics.Metrics
+	if len(metrics) > 0 {
+		instrumentation = metrics[0]
+	}
+	return &ShipmentService{database: database, warehouse: warehouse, metrics: instrumentation}
 }
 
 func (service *ShipmentService) Create(ctx context.Context, input CreateShipmentInput, idempotencyKey, sourceService, requestID string) (*models.Shipment, bool, error) {
@@ -188,6 +194,10 @@ func (service *ShipmentService) Create(ctx context.Context, input CreateShipment
 	})
 	if err != nil {
 		return nil, false, err
+	}
+	if created && service.metrics != nil {
+		service.metrics.ShipmentsCreated.WithLabelValues("outbound").Inc()
+		service.metrics.ShipmentOperations.WithLabelValues("created").Inc()
 	}
 	return &shipment, created, nil
 }
@@ -290,6 +300,10 @@ func (service *ShipmentService) CreateReturn(ctx context.Context, input CreateRe
 	})
 	if err != nil {
 		return nil, false, err
+	}
+	if created && service.metrics != nil {
+		service.metrics.ShipmentsCreated.WithLabelValues("return").Inc()
+		service.metrics.ReturnsCreated.Inc()
 	}
 	return &shipment, created, nil
 }
@@ -409,7 +423,44 @@ func (service *ShipmentService) Transition(ctx context.Context, shipmentPublicID
 	if err != nil {
 		return nil, false, err
 	}
+	if !replayed && service.metrics != nil {
+		shipmentType := "outbound"
+		if shipment.IsReturn {
+			shipmentType = "return"
+			service.metrics.ReturnStatusTransitions.WithLabelValues(string(next)).Inc()
+		}
+		service.metrics.ShipmentStatusTransitions.WithLabelValues(shipmentType, string(next)).Inc()
+		service.metrics.ShipmentOperations.WithLabelValues(operationMetric(next)).Inc()
+		if next == models.StatusDeliveryFailed {
+			service.metrics.DeliveryFailures.Inc()
+		}
+		if next == models.StatusDelivered {
+			service.metrics.DeliveryDuration.Observe(time.Since(shipment.CreatedAt).Seconds())
+		}
+		if next == models.StatusReceivedByShipping {
+			service.metrics.TimeToFirstReceipt.Observe(time.Since(shipment.CreatedAt).Seconds())
+		}
+	}
 	return &shipment, replayed, nil
+}
+
+func operationMetric(status models.ShipmentStatus) string {
+	switch status {
+	case models.StatusReceivedByShipping:
+		return "received"
+	case models.StatusShipmentPrepared:
+		return "prepared"
+	case models.StatusInTransit:
+		return "in_transit"
+	case models.StatusOutForDelivery:
+		return "out_for_delivery"
+	case models.StatusDelivered:
+		return "delivered"
+	case models.StatusDeliveryFailed:
+		return "delivery_failed"
+	default:
+		return "other"
+	}
 }
 
 func (service *ShipmentService) Cancel(ctx context.Context, shipmentPublicID, idempotencyKey, requestID, sourceService string) (*models.Shipment, bool, error) {

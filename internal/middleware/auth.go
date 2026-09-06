@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mustafa-oezdemir/shipping-service/internal/httpapi"
+	appmetrics "github.com/mustafa-oezdemir/shipping-service/internal/metrics"
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
 )
 
@@ -32,6 +33,9 @@ func RequireServiceToken(tokens ...string) gin.HandlerFunc {
 				context.Next()
 				return
 			}
+		}
+		if metrics := appmetrics.Default(); metrics != nil {
+			metrics.APIAuthFailures.Inc()
 		}
 		httpapi.Error(context, http.StatusUnauthorized, "UNAUTHORIZED", "Valid service credentials are required", CurrentRequestID(context))
 		context.Abort()

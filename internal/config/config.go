@@ -16,6 +16,7 @@ import (
 type Config struct {
 	AppEnv                     string
 	AppPort                    string
+	MetricsPort                string
 	AppURL                     string
 	GinMode                    string
 	TrustedProxies             []string
@@ -92,6 +93,7 @@ func Load() (Config, error) {
 	config := Config{
 		AppEnv:                     appEnv,
 		AppPort:                    environment("APP_PORT", "8090"),
+		MetricsPort:                environment("METRICS_PORT", "9092"),
 		AppURL:                     validatedAppURL,
 		GinMode:                    strings.ToLower(environment("GIN_MODE", map[bool]string{true: "release", false: "debug"}[appEnv == "production"])),
 		TrustedProxies:             csvEnvironment("TRUSTED_PROXIES"),

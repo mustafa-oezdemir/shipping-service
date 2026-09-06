@@ -26,6 +26,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       APP_PORT: 8090
+      METRICS_PORT: 9092
       APP_URL: ${APP_URL:-http://localhost:8090}
       GIN_MODE: ${GIN_MODE:-debug}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
@@ -66,6 +67,8 @@ services:
       WAREHOUSE_COUNTRY: ${WAREHOUSE_COUNTRY:-DE}
     ports:
       - "${SHIPPING_HOST_PORT:-8090}:8090"
+    expose:
+      - "9092"
     volumes:
       - shipping_profile_images:/app/data/profile-images
     networks:

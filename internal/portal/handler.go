@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	appmetrics "github.com/mustafa-oezdemir/shipping-service/internal/metrics"
 	"github.com/mustafa-oezdemir/shipping-service/internal/middleware"
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
 	"github.com/mustafa-oezdemir/shipping-service/internal/services"
@@ -130,6 +131,9 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 	passwordMatches := bcrypt.CompareHashAndPassword(hash, []byte(c.PostForm("password"))) == nil
 	if err != nil || !user.IsActive || !passwordMatches {
+		if metrics := appmetrics.Default(); metrics != nil {
+			metrics.EmployeeLogins.WithLabelValues("failure").Inc()
+		}
 		h.audit(c, nil, "login_failed", "user", email, "", "")
 		h.loginFailure(c)
 		return
@@ -141,6 +145,9 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 	h.limiter.Reset(key)
+	if metrics := appmetrics.Default(); metrics != nil {
+		metrics.EmployeeLogins.WithLabelValues("success").Inc()
+	}
 	// #nosec G124 -- Secure is mandatory in production and intentionally false for HTTP localhost development.
 	http.SetCookie(c.Writer, &http.Cookie{Name: "shipping_login_csrf", Value: "", Path: "/login", MaxAge: -1, HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode})
 	h.audit(c, &user.ID, "login", "user", strconv.Itoa(int(user.ID)), "", "")
@@ -323,10 +330,16 @@ func (h *Handler) ScanResult(c *gin.Context) {
 	value := h.scannedShipmentIdentifier(c.PostForm("tracking_number"))
 	var shipment models.Shipment
 	if value == "" || h.db.WithContext(c.Request.Context()).Where("tracking_number = ? OR public_id = ?", value, value).First(&shipment).Error != nil {
+		if metrics := appmetrics.Default(); metrics != nil {
+			metrics.QRScans.WithLabelValues("not_found").Inc()
+		}
 		data := h.base(c)
 		data["Error"] = "Shipment not found"
 		c.HTML(http.StatusNotFound, "scan.tmpl", data)
 		return
+	}
+	if metrics := appmetrics.Default(); metrics != nil {
+		metrics.QRScans.WithLabelValues("success").Inc()
 	}
 	user, _ := CurrentUser(c)
 	h.audit(c, &user.ID, "qr_scanned", "shipment", shipment.PublicID, "", string(shipment.Status))

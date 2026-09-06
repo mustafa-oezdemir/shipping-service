@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/mustafa-oezdemir/shipping-service/internal/httpapi"
+	appmetrics "github.com/mustafa-oezdemir/shipping-service/internal/metrics"
 	"github.com/mustafa-oezdemir/shipping-service/internal/middleware"
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
 	"github.com/mustafa-oezdemir/shipping-service/internal/services"
@@ -26,10 +27,15 @@ type Handler struct {
 	service       *services.ShipmentService
 	database      *gorm.DB
 	publicBaseURL string
+	metrics       *appmetrics.Metrics
 }
 
-func New(service *services.ShipmentService, database *gorm.DB, publicBaseURL string) *Handler {
-	return &Handler{service: service, database: database, publicBaseURL: strings.TrimRight(publicBaseURL, "/")}
+func New(service *services.ShipmentService, database *gorm.DB, publicBaseURL string, metrics ...*appmetrics.Metrics) *Handler {
+	var instrumentation *appmetrics.Metrics
+	if len(metrics) > 0 {
+		instrumentation = metrics[0]
+	}
+	return &Handler{service: service, database: database, publicBaseURL: strings.TrimRight(publicBaseURL, "/"), metrics: instrumentation}
 }
 
 func (handler *Handler) Index(context *gin.Context) {
@@ -37,14 +43,23 @@ func (handler *Handler) Index(context *gin.Context) {
 }
 
 func (handler *Handler) Health(context *gin.Context) {
+	if handler.metrics != nil {
+		handler.metrics.HealthLive.Set(1)
+	}
 	context.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 func (handler *Handler) Ready(context *gin.Context) {
 	sqlDB, err := handler.database.DB()
 	if err != nil || sqlDB.PingContext(context.Request.Context()) != nil {
+		if handler.metrics != nil {
+			handler.metrics.HealthReady.Set(0)
+		}
 		context.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable"})
 		return
+	}
+	if handler.metrics != nil {
+		handler.metrics.HealthReady.Set(1)
 	}
 	context.JSON(http.StatusOK, gin.H{"status": "ready"})
 }

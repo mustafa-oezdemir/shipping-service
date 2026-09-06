@@ -13,12 +13,15 @@ import (
 	"github.com/mustafa-oezdemir/shipping-service/internal/config"
 	"github.com/mustafa-oezdemir/shipping-service/internal/database"
 	"github.com/mustafa-oezdemir/shipping-service/internal/handlers"
+	appmetrics "github.com/mustafa-oezdemir/shipping-service/internal/metrics"
 	"github.com/mustafa-oezdemir/shipping-service/internal/middleware"
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
 	"github.com/mustafa-oezdemir/shipping-service/internal/outbox"
 	"github.com/mustafa-oezdemir/shipping-service/internal/portal"
 	"github.com/mustafa-oezdemir/shipping-service/internal/services"
 	"github.com/mustafa-oezdemir/shipping-service/web"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -35,12 +38,26 @@ func main() {
 	if err := database.Migrate(shippingDatabase); err != nil {
 		log.Fatal(err)
 	}
+	registry := prometheus.NewRegistry()
+	metrics := appmetrics.New(registry)
+	appmetrics.SetDefault(metrics)
+	sqlDatabase, err := shippingDatabase.DB()
+	if err != nil {
+		log.Fatal(err)
+	}
+	registry.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		collectors.NewDBStatsCollector(sqlDatabase, "shipping"),
+		appmetrics.NewStateCollector(shippingDatabase),
+	)
+	metrics.HealthLive.Set(1)
 	templates, err := web.ParseTemplates()
 	if err != nil {
 		log.Fatal(err)
 	}
-	shipmentService := services.NewShipmentService(shippingDatabase, appConfig.Warehouse)
-	handler := handlers.New(shipmentService, shippingDatabase, appConfig.PublicBaseURL)
+	shipmentService := services.NewShipmentService(shippingDatabase, appConfig.Warehouse, metrics)
+	handler := handlers.New(shipmentService, shippingDatabase, appConfig.PublicBaseURL, metrics)
 	if err := portal.BootstrapAdmin(shippingDatabase, appConfig.InitialAdminEmail, appConfig.InitialAdminPassword, appConfig.InitialAdminFirstName, appConfig.InitialAdminLastName); err != nil {
 		log.Fatal(err)
 	}
@@ -54,14 +71,17 @@ func main() {
 	if err := router.SetTrustedProxies(appConfig.TrustedProxies); err != nil {
 		log.Fatal(err)
 	}
-	router.Use(middleware.RequestMetadata("shipping-service"), middleware.SecurityHeaders(appConfig.AppEnv == "production"), gin.Logger(), gin.Recovery())
+	router.Use(middleware.RequestMetadata("shipping-service"), middleware.Metrics(metrics), middleware.SecurityHeaders(appConfig.AppEnv == "production"), gin.Logger(), gin.Recovery())
 	router.MaxMultipartMemory = 1 << 20
 	router.SetHTMLTemplate(templates)
 	router.Static("/static", "./web/static")
 	router.GET("/", handler.Index)
 	router.GET("/health", handler.Health)
+	router.GET("/health/live", handler.Health)
+	router.GET("/healthz", handler.Health)
 	router.GET("/ready", handler.Ready)
-	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	router.GET("/health/ready", handler.Ready)
+	router.GET("/readyz", handler.Ready)
 	router.GET("/track/:trackingNumber", handler.PublicTracking)
 	router.GET("/qr/:trackingNumber", handler.TrackingQR)
 	portalHandler.Register(router)
@@ -87,14 +107,23 @@ func main() {
 	defer stop()
 	go dispatcher.Run(rootContext)
 
-	server := &http.Server{Addr: ":" + appConfig.AppPort, Handler: router, ReadHeaderTimeout: 5 * time.Second}
-	go func() {
-		<-rootContext.Done()
-		shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = server.Shutdown(shutdownContext)
-	}()
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+	applicationServer := &http.Server{Addr: ":" + appConfig.AppPort, Handler: router, ReadHeaderTimeout: 5 * time.Second}
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+	metricsServer := &http.Server{Addr: ":" + appConfig.MetricsPort, Handler: metricsMux, ReadHeaderTimeout: 5 * time.Second}
+
+	serverErrors := make(chan error, 2)
+	go func() { serverErrors <- applicationServer.ListenAndServe() }()
+	go func() { serverErrors <- metricsServer.ListenAndServe() }()
+	select {
+	case <-rootContext.Done():
+	case err := <-serverErrors:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("HTTP server stopped unexpectedly: %v", err)
+		}
 	}
+	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = applicationServer.Shutdown(shutdownContext)
+	_ = metricsServer.Shutdown(shutdownContext)
 }
