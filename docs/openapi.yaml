@@ -1,0 +1,289 @@
+openapi: 3.1.0
+info:
+  title: NordShop Shipping Service Internal API
+  version: 1.0.0
+servers:
+  - url: http://shipping-app:8090
+components:
+  securitySchemes:
+    serviceToken:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  parameters:
+    requestId:
+      in: header
+      name: X-Request-ID
+      required: false
+      schema:
+        type: string
+    idempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+    shippingRole:
+      in: header
+      name: X-Shipping-Role
+      required: false
+      schema:
+        type: string
+        enum: [shipping_admin, warehouse_employee, delivery_employee, support]
+  schemas:
+    EnvelopeError:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: string
+    EstimatedDelivery:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date-time
+        until:
+          type: string
+          format: date-time
+    ShipmentSummary:
+      type: object
+      required: [shipment_id, order_id, tracking_number, shipment_type, status, status_label]
+      properties:
+        shipment_id:
+          type: string
+        order_id:
+          type: string
+        tracking_number:
+          type: string
+        shipment_type:
+          type: string
+          enum: [outbound, return]
+        status:
+          type: string
+        status_label:
+          type: string
+        remaining_stops:
+          type: integer
+        estimated_delivery:
+          $ref: '#/components/schemas/EstimatedDelivery'
+    ShipmentCreated:
+      type: object
+      required: [shipment_id, tracking_number, shipment_type, status, status_label, idempotent_replay]
+      properties:
+        shipment_id:
+          type: string
+        tracking_number:
+          type: string
+        shipment_type:
+          type: string
+        status:
+          type: string
+        status_label:
+          type: string
+        estimated_delivery:
+          $ref: '#/components/schemas/EstimatedDelivery'
+        idempotent_replay:
+          type: boolean
+    ShipmentEvent:
+      type: object
+      required: [event_id, status, title, occurred_at]
+      properties:
+        event_id:
+          type: string
+        status:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        remaining_stops:
+          type: integer
+        estimated_delivery:
+          $ref: '#/components/schemas/EstimatedDelivery'
+        occurred_at:
+          type: string
+          format: date-time
+security:
+  - serviceToken: []
+paths:
+  /api/v1/shipments:
+    post:
+      summary: Create shipment
+      parameters:
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201': {description: Shipment created}
+        '200': {description: Idempotent replay}
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeError'
+  /api/v1/shipments/{trackingNumber}:
+    get:
+      summary: Get shipment by tracking number
+      parameters:
+        - in: path
+          name: trackingNumber
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Tracking summary}
+  /api/v1/shipments/order/{orderID}:
+    get:
+      summary: Get shipment by order id
+      parameters:
+        - in: path
+          name: orderID
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Tracking summary}
+  /api/v1/shipments/{trackingNumber}/events:
+    get:
+      summary: Get shipment timeline
+      parameters:
+        - in: path
+          name: trackingNumber
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Shipment events}
+  /api/v1/shipments/{shipmentID}/status:
+    patch:
+      summary: Transition shipment status
+      parameters:
+        - in: path
+          name: shipmentID
+          required: true
+          schema: {type: string}
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/shippingRole'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_status, status]
+              properties:
+                expected_status: {type: string}
+                status: {type: string}
+      responses:
+        '200': {description: Updated shipment summary}
+  /api/v1/shipments/{shipmentID}/eta:
+    patch:
+      summary: Update estimated delivery window
+      parameters:
+        - in: path
+          name: shipmentID
+          required: true
+          schema: {type: string}
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/shippingRole'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                estimated_delivery:
+                  $ref: '#/components/schemas/EstimatedDelivery'
+      responses:
+        '200': {description: Updated shipment summary}
+  /api/v1/shipments/{shipmentID}/stops:
+    patch:
+      summary: Update remaining stops
+      parameters:
+        - in: path
+          name: shipmentID
+          required: true
+          schema: {type: string}
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/shippingRole'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [remaining_stops]
+              properties:
+                remaining_stops: {type: integer, minimum: 0}
+      responses:
+        '200': {description: Updated shipment summary}
+  /api/v1/shipments/{shipmentID}/events:
+    post:
+      summary: Append tracking event
+      parameters:
+        - in: path
+          name: shipmentID
+          required: true
+          schema: {type: string}
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/shippingRole'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_type, title]
+              properties:
+                event_type: {type: string}
+                title: {type: string}
+                description: {type: string}
+                location_name: {type: string}
+                city: {type: string}
+                postal_code: {type: string}
+                country_code: {type: string}
+                occurred_at: {type: string, format: date-time}
+                remaining_stops: {type: integer, minimum: 0}
+      responses:
+        '201': {description: Shipment event created}
+  /api/v1/returns:
+    post:
+      summary: Create return shipment
+      parameters:
+        - $ref: '#/components/parameters/requestId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      responses:
+        '201': {description: Return shipment created}
+        '200': {description: Idempotent replay}
+  /api/v1/returns/{trackingNumber}:
+    get:
+      summary: Get return shipment by tracking number
+      parameters:
+        - in: path
+          name: trackingNumber
+          required: true
+          schema: {type: string}
+      responses:
+        '200': {description: Return tracking summary}

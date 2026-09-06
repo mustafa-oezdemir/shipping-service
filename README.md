@@ -2,53 +2,119 @@
 
 An independent Go/Gin logistics service for NordShop. It owns shipment tracking, delivery events, labels, QR codes, and operational logistics data. It does **not** read from or write to the e-commerce database.
 
-```mermaid
-flowchart LR
-  E[ecommerce-gin\norders, customers, addresses] -->|authenticated REST API\nimmutable snapshot| S[shipping-service\nshipments, events, tracking]
-  S --> D[(shipping MySQL)]
-  C[Customer] -->|public tracking number| S
-  L[Logistics employee] -->|authenticated operations API| S
+## E-Commerce ↔ Shipping architecture
+
+- `ecommerce-gin` remains the source of truth for orders, customers, payments, refunds, and return authorization rules.
+- `shipping-service` owns shipment records, immutable sender/recipient snapshots, tracking numbers, delivery lifecycle state, timeline events, audit logs, and the ecommerce callback outbox.
+- The integration is HTTP-only. No shared database tables, ORM models, or direct database imports are required or allowed.
+- Shipment/return creation is idempotent via `Idempotency-Key`, shipping-side business keys, and database uniqueness constraints.
+- Versioned migrations are applied through `schema_migrations`; runtime code no longer relies on `AutoMigrate`.
+
+## Authentication and request headers
+
+All `/api/v1/*` endpoints require `Authorization: Bearer <token>`.
+
+### Inbound e-commerce → shipping
+
+- `ECOMMERCE_TO_SHIPPING_TOKEN` is the active service token.
+- `ECOMMERCE_TO_SHIPPING_PREVIOUS_TOKEN` is optional for rotation.
+- `ECOMMERCE_SERVICE_TOKEN` is still accepted as a backward-compatible fallback env var.
+
+### Outbound shipping → e-commerce callbacks
+
+- `ECOMMERCE_CALLBACK_URL` is the protected e-commerce callback endpoint.
+- `SHIPPING_TO_ECOMMERCE_TOKEN` is sent as `Authorization: Bearer ...` for outbox delivery (`ECOMMERCE_CALLBACK_TOKEN` remains a compatibility alias).
+
+### Required headers
+
+- `Idempotency-Key` for `POST /api/v1/shipments` and `POST /api/v1/returns`
+- `X-Request-ID` propagated end-to-end; generated when absent
+- `X-Service-Name` or `User-Agent` for source-service attribution
+- `X-Shipping-Role` for privileged operational routes (`shipping_admin`, `warehouse_employee`, `delivery_employee`, `support`)
+
+## Internal API contract
+
+Success envelope:
+
+```json
+{
+  "success": true,
+  "data": {}
+}
 ```
 
-## Architecture and data ownership
+Error envelope:
 
-- `ecommerce-gin` remains the source of truth for customers, orders, products, payments, refunds, and customer addresses.
-- This service owns shipments, immutable sender/recipient address snapshots, shipment item summaries, lifecycle events, audit records, and delivery outbox records.
-- Shipment creation is idempotent through `Idempotency-Key`, unique external order IDs, and database constraints. Shipping does not share a database or modify e-commerce tables.
-- Its versioned migration runner creates and records the logistics schema in the independent shipping database; `migrations/000001_initial.sql` documents the database boundary.
+```json
+{
+  "success": false,
+  "error": {
+    "code": "SHIPMENT_NOT_FOUND",
+    "message": "Shipment not found",
+    "request_id": "req_..."
+  }
+}
+```
 
-## API
+Focused endpoints:
 
-All `/api/v1/*` endpoints require `Authorization: Bearer <ECOMMERCE_SERVICE_TOKEN>`.
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/api/v1/shipments` | Create or idempotently replay an outbound shipment |
+| `GET` | `/api/v1/shipments/:trackingNumber` | JSON tracking summary without recipient PII |
+| `GET` | `/api/v1/shipments/order/:orderID` | E-commerce order → shipment lookup |
+| `GET` | `/api/v1/shipments/:trackingNumber/events` | Tracking timeline/events |
+| `PATCH` | `/api/v1/shipments/:id/status` | Role-guarded lifecycle transition using public shipment id |
+| `PATCH` | `/api/v1/shipments/:id/eta` | Role-guarded ETA update |
+| `PATCH` | `/api/v1/shipments/:id/stops` | Role-guarded remaining stops update |
+| `POST` | `/api/v1/shipments/:id/events` | Role-guarded timeline event append |
+| `POST` | `/api/v1/returns` | Create or idempotently replay a physical return shipment |
+| `GET` | `/api/v1/returns/:trackingNumber` | JSON return tracking summary |
 
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /api/v1/shipments` | Create/idempotently retrieve a shipment from an e-commerce snapshot |
-| `POST /api/v1/returns` | Create/idempotently retrieve an authorized physical return shipment |
-| `GET /api/v1/shipments/order/:orderID` | Get a shipment associated with an external order |
-| `PATCH /api/v1/shipments/:id/status` | Apply a guarded status transition |
-| `PATCH /api/v1/shipments/:id/stops` | Update remaining stops while out for delivery |
-| `GET /track/:trackingNumber` | Public, PII-minimized tracking timeline |
-| `GET /qr/:trackingNumber` | Public tracking QR image |
-| `GET /health`, `GET /ready` | Process and database readiness probes |
-
-Operational requests also require `X-Shipping-Role` (`shipping_admin`, `warehouse_employee`, `delivery_employee`, or `support`). A role is permitted only for its operational transitions. The first version uses trusted service credentials and role headers between internal trusted clients; replace this adapter with OIDC or mTLS at the deployment boundary.
+The OpenAPI description lives in `docs/openapi.yaml`.
 
 ## Shipment lifecycle
 
+Outbound shipments:
+
 `created → label_created → ready_for_pickup → handed_over → received_at_origin → sorting → in_transit → arrived_at_destination_hub → out_for_delivery → delivered`
 
-Delivery failure and return states are typed separately. Invalid or stale transitions are rejected by a transaction plus optimistic version check. Each accepted update writes a timeline event, audit record, and an outbox record for reliable callback delivery.
+Return shipments:
 
-Returns use the same physical-shipment lifecycle with return-specific statuses (`return_requested` through `return_completed`) and are created through the authenticated return endpoint using selected item and customer-address snapshots. Refund decisions remain in e-commerce.
+`return_requested → return_authorized → return_label_created → return_in_transit → return_received → return_completed`
 
-## Labels and QR
+Each accepted status/ETA/stops/event mutation writes:
 
-- `GET /shipments/:id/label` produces a printable HTML label for an authenticated logistics caller.
-- The public QR contains only the public tracking URL; the public tracking page masks address data.
-- Internal shipment pages display the immutable address snapshot only after service-token and shipping-role authorization.
+1. a shipment event
+2. an audit log row
+3. an outbox row for callback delivery
 
-## Local Docker setup
+## Public features preserved
+
+- `GET /track/:trackingNumber` keeps the HTML tracking page.
+- `GET /qr/:trackingNumber` keeps the public QR image.
+- `GET /shipments/:id/label` keeps the operational HTML label.
+- Public tracking strips sender/recipient address details before rendering.
+
+## Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_DSN` | Shipping database DSN |
+| `DATABASE_CONNECT_TIMEOUT` | Bounded startup retry window for the Shipping database |
+| `ECOMMERCE_TO_SHIPPING_TOKEN` | Current inbound internal API token |
+| `ECOMMERCE_TO_SHIPPING_PREVIOUS_TOKEN` | Optional previous inbound token during rotation |
+| `ECOMMERCE_CALLBACK_URL` | E-commerce callback endpoint for shipping events |
+| `SHIPPING_TO_ECOMMERCE_TOKEN` | Outbound callback bearer token |
+| `INTERNAL_QR_SECRET` | Reserved secret for future signed internal QR flows |
+| `PUBLIC_BASE_URL` | Public base URL encoded in QR codes |
+| `OUTBOX_POLL_INTERVAL` | Dispatcher poll interval |
+| `OUTBOX_RETRY_BASE_DELAY` | Base retry backoff |
+| `OUTBOX_PROCESSING_STALE_AFTER` | Recover stuck processing outbox rows after this age |
+| `OUTBOX_MAX_ATTEMPTS` | Max callback delivery attempts before permanent failure |
+| `WAREHOUSE_*` | Sender/depot address snapshot configuration |
+
+## Docker / local development
 
 ```bash
 cp .env.example .env
@@ -56,30 +122,14 @@ docker compose config
 docker compose up --build
 ```
 
-The service runs at `http://localhost:8090` by default and uses its own `shipping-db` MySQL container. Required settings:
+- Host access: `http://localhost:8090`
+- Container-to-container access: use Docker DNS such as `http://shipping-app:8090`
+- Callback URLs should target the e-commerce container/service, not `localhost`, when both run in Docker
 
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_DSN` | Shipping database DSN for host execution |
-| `ECOMMERCE_SERVICE_TOKEN` | At least 32 random characters for internal API authentication |
-| `INTERNAL_QR_SECRET` | Reserved at least 32-character secret for signed internal QR tokens |
-| `PUBLIC_BASE_URL` | Public base URL encoded in tracking QR codes |
-| `ECOMMERCE_CALLBACK_URL` | Future authenticated outbox callback target |
-| `WAREHOUSE_*` | Sender/depot address snapshot configuration |
-
-No real secrets are committed. Keep `.env` private.
-
-## Security
-
-The service applies service-to-service authentication, role checks, input validation, idempotency, transaction and optimistic-locking safeguards, generated opaque tracking identifiers, database uniqueness constraints, PII-minimized public tracking, and audit/outbox records. Do not log customer addresses, tracking numbers, or customer IDs as metrics labels.
-
-## Tests and verification
+## Verification commands
 
 ```bash
-gofmt -w .
-go vet ./...
-go test ./...
-go test -race ./...
-go build ./...
+go test ./internal/...
+go build ./cmd/server
 docker compose config
 ```

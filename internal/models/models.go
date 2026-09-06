@@ -8,6 +8,8 @@ import (
 
 type ShipmentStatus string
 
+type OutboxStatus string
+
 const (
 	StatusCreated               ShipmentStatus = "created"
 	StatusLabelCreated          ShipmentStatus = "label_created"
@@ -28,6 +30,13 @@ const (
 	StatusReturnReceived        ShipmentStatus = "return_received"
 	StatusReturnCompleted       ShipmentStatus = "return_completed"
 	StatusCancelled             ShipmentStatus = "cancelled"
+)
+
+const (
+	OutboxStatusPending    OutboxStatus = "pending"
+	OutboxStatusProcessing OutboxStatus = "processing"
+	OutboxStatusDelivered  OutboxStatus = "delivered"
+	OutboxStatusFailed     OutboxStatus = "failed"
 )
 
 func (status ShipmentStatus) CanTransitionTo(next ShipmentStatus) bool {
@@ -58,7 +67,7 @@ type AddressSnapshot struct {
 	Company      string `json:"company"`
 	Street       string `json:"street"`
 	HouseNumber  string `json:"house_number"`
-	AddressLine2 string `json:"address_line2"`
+	AddressLine2 string `json:"address_line_2"`
 	PostalCode   string `json:"postal_code"`
 	City         string `json:"city"`
 	State        string `json:"state"`
@@ -68,13 +77,16 @@ type AddressSnapshot struct {
 
 type Shipment struct {
 	gorm.Model
+	PublicID           string          `gorm:"size:64;uniqueIndex;not null"`
 	ShipmentNumber     string          `gorm:"size:64;uniqueIndex;not null"`
 	TrackingNumber     string          `gorm:"size:64;uniqueIndex;not null"`
-	ExternalOrderID    string          `gorm:"size:64;uniqueIndex:idx_shipments_order_direction;not null"`
+	ExternalOrderID    string          `gorm:"size:64;index;not null"`
 	ExternalCustomerID string          `gorm:"size:64;index;not null"`
-	IdempotencyKey     string          `gorm:"size:128;uniqueIndex;not null"`
+	BusinessKey        string          `gorm:"size:191;uniqueIndex;not null"`
+	SourceService      string          `gorm:"size:80;not null;uniqueIndex:idx_shipments_source_idempotency,priority:1"`
+	IdempotencyKey     string          `gorm:"size:128;not null;uniqueIndex:idx_shipments_source_idempotency,priority:2"`
 	OriginalShipmentID *uint           `gorm:"index"`
-	IsReturn           bool            `gorm:"uniqueIndex:idx_shipments_order_direction;not null;default:false"`
+	IsReturn           bool            `gorm:"not null;default:false;index"`
 	Status             ShipmentStatus  `gorm:"size:50;index;not null"`
 	Carrier            string          `gorm:"size:80;not null"`
 	ServiceLevel       string          `gorm:"size:80;not null"`
@@ -101,8 +113,11 @@ type ShipmentItem struct {
 
 type ShipmentEvent struct {
 	gorm.Model
+	EventID        string         `gorm:"size:64;uniqueIndex;not null"`
 	ShipmentID     uint           `gorm:"not null;index"`
-	IdempotencyKey string         `gorm:"size:128;uniqueIndex"`
+	SourceService  string         `gorm:"size:80;not null;uniqueIndex:idx_shipment_events_source_idempotency,priority:1"`
+	IdempotencyKey string         `gorm:"size:128;not null;uniqueIndex:idx_shipment_events_source_idempotency,priority:2"`
+	RequestID      string         `gorm:"size:80;index;not null"`
 	EventType      string         `gorm:"size:64;not null"`
 	Status         ShipmentStatus `gorm:"size:50;index;not null"`
 	Title          string         `gorm:"size:255;not null"`
@@ -112,6 +127,8 @@ type ShipmentEvent struct {
 	PostalCode     string         `gorm:"size:20"`
 	CountryCode    string         `gorm:"size:2"`
 	RemainingStops *int
+	EstimatedFrom  *time.Time
+	EstimatedUntil *time.Time
 	OccurredAt     time.Time `gorm:"not null;index"`
 	CreatedByType  string    `gorm:"size:40;not null"`
 	CreatedByID    string    `gorm:"size:64"`
@@ -129,12 +146,17 @@ type AuditLog struct {
 
 type OutboxEvent struct {
 	gorm.Model
-	ShipmentID    uint      `gorm:"not null;index"`
-	EventType     string    `gorm:"size:80;not null"`
-	Payload       string    `gorm:"type:json;not null"`
-	Status        string    `gorm:"size:20;index;not null;default:pending"`
-	Attempts      int       `gorm:"not null;default:0"`
-	NextAttemptAt time.Time `gorm:"index;not null"`
+	EventID         string       `gorm:"size:64;uniqueIndex;not null"`
+	ShipmentID      uint         `gorm:"not null;index"`
+	ShipmentEventID uint         `gorm:"not null;uniqueIndex"`
+	RequestID       string       `gorm:"size:80;index;not null"`
+	EventType       string       `gorm:"size:80;not null"`
+	Payload         string       `gorm:"type:json;not null"`
+	Status          OutboxStatus `gorm:"size:20;index;not null;default:pending"`
+	Attempts        int          `gorm:"not null;default:0"`
+	LastError       string       `gorm:"size:255"`
+	NextAttemptAt   time.Time    `gorm:"index;not null"`
+	DeliveredAt     *time.Time
 }
 
 type Role string

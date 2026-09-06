@@ -1,9 +1,13 @@
 package services
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/mustafa-oezdemir/shipping-service/internal/config"
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
+	"github.com/mustafa-oezdemir/shipping-service/internal/testutil"
 )
 
 func TestShipmentLifecycle(t *testing.T) {
@@ -38,5 +42,62 @@ func TestGenerateNumber(t *testing.T) {
 	}
 	if first == second {
 		t.Fatal("tracking numbers must be collision resistant")
+	}
+}
+
+func TestCreateShipmentIsIdempotent(t *testing.T) {
+	database := testutil.NewTestDB(t)
+	service := NewShipmentService(database, config.Warehouse{Name: "NordShop", Street: "Musterstrasse", HouseNumber: "10", PostalCode: "35039", City: "Marburg", CountryCode: "DE"})
+	from := time.Now().UTC().Add(2 * time.Hour)
+	until := from.Add(2 * time.Hour)
+	input := CreateShipmentInput{OrderID: "17", CustomerID: "5", Carrier: "DHL", ServiceLevel: "standard", EstimatedFrom: &from, EstimatedUntil: &until, Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", SKU: "ABC-123", Quantity: 1}}}
+	first, created, err := service.Create(context.Background(), input, "idem-17", "ecommerce-gin", "req-17")
+	if err != nil {
+		t.Fatalf("create first shipment: %v", err)
+	}
+	if !created {
+		t.Fatal("first shipment should be marked created")
+	}
+	second, created, err := service.Create(context.Background(), input, "idem-17", "ecommerce-gin", "req-17")
+	if err != nil {
+		t.Fatalf("replay shipment creation: %v", err)
+	}
+	if created {
+		t.Fatal("replayed shipment should not be marked created")
+	}
+	if first.PublicID != second.PublicID || first.TrackingNumber != second.TrackingNumber {
+		t.Fatal("replayed shipment should return the existing shipment")
+	}
+	var count int64
+	if err := database.Model(&models.Shipment{}).Count(&count).Error; err != nil {
+		t.Fatalf("count shipments: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 shipment, got %d", count)
+	}
+}
+
+func TestCreateShipmentRejectsInvalidGermanAddress(t *testing.T) {
+	database := testutil.NewTestDB(t)
+	service := NewShipmentService(database, config.Warehouse{Name: "NordShop", Street: "Musterstrasse", HouseNumber: "10", PostalCode: "35039", City: "Marburg", CountryCode: "DE"})
+	_, _, err := service.Create(context.Background(), CreateShipmentInput{OrderID: "17", CustomerID: "5", Carrier: "DHL", ServiceLevel: "standard", Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "3503", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-17", "ecommerce-gin", "req-17")
+	if err == nil {
+		t.Fatal("expected invalid German address to be rejected")
+	}
+}
+
+func TestCreateReturnUsesPublicShipmentIdentifier(t *testing.T) {
+	database := testutil.NewTestDB(t)
+	service := NewShipmentService(database, config.Warehouse{Name: "NordShop", Street: "Musterstrasse", HouseNumber: "10", PostalCode: "35039", City: "Marburg", CountryCode: "DE"})
+	shipment, _, err := service.Create(context.Background(), CreateShipmentInput{OrderID: "17", CustomerID: "5", Carrier: "DHL", ServiceLevel: "standard", Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-17", "ecommerce-gin", "req-17")
+	if err != nil {
+		t.Fatalf("create outbound shipment: %v", err)
+	}
+	returnShipment, created, err := service.CreateReturn(context.Background(), CreateReturnInput{OriginalShipmentID: shipment.PublicID, OrderID: "17", CustomerID: "5", CustomerAddress: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-ret-17", "ecommerce-gin", "req-ret-17")
+	if err != nil {
+		t.Fatalf("create return shipment: %v", err)
+	}
+	if !created || !returnShipment.IsReturn {
+		t.Fatal("return shipment should be created and marked as return")
 	}
 }
