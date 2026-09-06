@@ -59,6 +59,17 @@ func TestPersonnelLoginRBACAndInactiveAccount(t *testing.T) {
 	_ = handler
 }
 
+func TestScannedShipmentIdentifierAcceptsOnlyOwnOpaqueQRURL(t *testing.T) {
+	handler := &Handler{publicURL: "https://pehlione-shipping.com"}
+	if got := handler.scannedShipmentIdentifier("https://pehlione-shipping.com/scan/shipment/shp_abc123"); got != "shp_abc123" {
+		t.Fatalf("opaque QR identifier = %q", got)
+	}
+	foreign := "https://other.example/scan/shipment/shp_abc123"
+	if got := handler.scannedShipmentIdentifier(foreign); got != foreign {
+		t.Fatalf("foreign QR URL must not be accepted: %q", got)
+	}
+}
+
 func TestAdminCreatesEmployeeAndEmployeeTransitionIsAudited(t *testing.T) {
 	router, handler, database := portalTestRouter(t)
 	admin := createPortalUser(t, database, "admin@example.com", models.RoleAdmin, true)

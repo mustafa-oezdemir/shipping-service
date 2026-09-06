@@ -95,7 +95,7 @@ func (handler *Handler) GetShipmentForOrder(context *gin.Context) {
 }
 
 func (handler *Handler) GetShipmentByTracking(context *gin.Context) {
-	shipment, err := handler.service.GetByTracking(context.Request.Context(), context.Param("trackingNumber"))
+	shipment, err := handler.service.GetPublic(context.Request.Context(), context.Param("trackingNumber"))
 	if err != nil {
 		handler.respondError(context, err)
 		return
@@ -230,8 +230,13 @@ func (handler *Handler) InternalShipment(context *gin.Context) {
 }
 
 func (handler *Handler) TrackingQR(context *gin.Context) {
-	trackingURL := handler.trackingURL(context.Param("trackingNumber"))
-	png, err := qrcode.Encode(trackingURL, qrcode.Medium, 256)
+	shipment, err := handler.service.GetByTracking(context.Request.Context(), context.Param("trackingNumber"))
+	if err != nil {
+		handler.respondError(context, err)
+		return
+	}
+	scanURL := handler.publicBaseURL + "/scan/shipment/" + url.PathEscape(shipment.PublicID)
+	png, err := qrcode.Encode(scanURL, qrcode.Medium, 256)
 	if err != nil {
 		context.AbortWithStatus(http.StatusInternalServerError)
 		return

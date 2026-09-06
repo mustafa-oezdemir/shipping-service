@@ -320,7 +320,7 @@ func (h *Handler) UpdateStops(c *gin.Context) {
 
 func (h *Handler) Scan(c *gin.Context) { c.HTML(http.StatusOK, "scan.tmpl", h.base(c)) }
 func (h *Handler) ScanResult(c *gin.Context) {
-	value := strings.TrimSpace(c.PostForm("tracking_number"))
+	value := h.scannedShipmentIdentifier(c.PostForm("tracking_number"))
 	var shipment models.Shipment
 	if value == "" || h.db.WithContext(c.Request.Context()).Where("tracking_number = ? OR public_id = ?", value, value).First(&shipment).Error != nil {
 		data := h.base(c)
@@ -331,6 +331,27 @@ func (h *Handler) ScanResult(c *gin.Context) {
 	user, _ := CurrentUser(c)
 	h.audit(c, &user.ID, "qr_scanned", "shipment", shipment.PublicID, "", string(shipment.Status))
 	c.Redirect(http.StatusFound, "/shipments/"+strconv.Itoa(int(shipment.ID)))
+}
+
+func (h *Handler) scannedShipmentIdentifier(raw string) string {
+	value := strings.TrimSpace(raw)
+	parsed, err := url.Parse(value)
+	if err != nil || !parsed.IsAbs() {
+		return value
+	}
+	publicURL, err := url.Parse(h.publicURL)
+	if err != nil || parsed.Scheme != publicURL.Scheme || parsed.Host != publicURL.Host || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return value
+	}
+	const prefix = "/scan/shipment/"
+	if !strings.HasPrefix(parsed.EscapedPath(), prefix) {
+		return value
+	}
+	identifier, err := url.PathUnescape(strings.TrimPrefix(parsed.EscapedPath(), prefix))
+	if err != nil || identifier == "" || strings.Contains(identifier, "/") {
+		return value
+	}
+	return identifier
 }
 
 func (h *Handler) Profile(c *gin.Context) { c.HTML(http.StatusOK, "profile.tmpl", h.base(c)) }
