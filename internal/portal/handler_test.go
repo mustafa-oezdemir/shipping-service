@@ -105,6 +105,115 @@ func TestAdminCreatesEmployeeAndEmployeeTransitionIsAudited(t *testing.T) {
 	}
 }
 
+func TestProfileUpdateUsesAuthenticatedUserAndAuditsChange(t *testing.T) {
+	router, handler, database := portalTestRouter(t)
+	employee := createPortalUser(t, database, "owner@example.com", models.RoleEmployee, true)
+	other := createPortalUser(t, database, "other@example.com", models.RoleEmployee, true)
+	cookie := loginPortal(t, router, employee.Email, "ValidPassword123", http.StatusFound)
+
+	form := url.Values{
+		"csrf_token": {handler.sessions.CSRFToken(cookie.Value)},
+		"user_id":    {strconv.Itoa(int(other.ID))},
+		"first_name": {"Authenticated"},
+		"last_name":  {"Owner"},
+	}
+	response := portalFormRequest(router, http.MethodPost, "/profile", cookie, form)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("profile update: got %d", response.Code)
+	}
+	if err := database.First(employee, employee.ID).Error; err != nil || employee.FirstName != "Authenticated" {
+		t.Fatal("authenticated employee profile was not updated")
+	}
+	if err := database.First(other, other.ID).Error; err != nil || other.FirstName != "Test" {
+		t.Fatal("forged user_id changed another account")
+	}
+	var audits int64
+	database.Model(&models.AuditLog{}).Where("actor_user_id = ? AND action = ?", employee.ID, "profile_updated").Count(&audits)
+	if audits != 1 {
+		t.Fatalf("expected profile audit, got %d", audits)
+	}
+}
+
+func TestAdminDisableInvalidatesEmployeeSession(t *testing.T) {
+	router, handler, database := portalTestRouter(t)
+	admin := createPortalUser(t, database, "admin@example.com", models.RoleAdmin, true)
+	employee := createPortalUser(t, database, "employee@example.com", models.RoleEmployee, true)
+	adminCookie := loginPortal(t, router, admin.Email, "ValidPassword123", http.StatusFound)
+	employeeCookie := loginPortal(t, router, employee.Email, "ValidPassword123", http.StatusFound)
+
+	form := url.Values{"csrf_token": {handler.sessions.CSRFToken(adminCookie.Value)}, "active": {"false"}}
+	response := portalFormRequest(router, http.MethodPost, "/admin/users/"+strconv.Itoa(int(employee.ID))+"/status", adminCookie, form)
+	if response.Code != http.StatusSeeOther {
+		t.Fatalf("disable employee: got %d", response.Code)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	request.AddCookie(employeeCookie)
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusFound || response.Header().Get("Location") != "/login" {
+		t.Fatalf("disabled session remained usable: %d %s", response.Code, response.Header().Get("Location"))
+	}
+	var sessions int64
+	database.Model(&models.BrowserSession{}).Where("user_id = ?", employee.ID).Count(&sessions)
+	if sessions != 0 {
+		t.Fatalf("disabled employee has %d sessions", sessions)
+	}
+}
+
+func TestProductionSessionCookieAndStaleLoginCookie(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	database := testutil.NewTestDB(t)
+	user := createPortalUser(t, database, "secure@example.com", models.RoleEmployee, true)
+	manager := NewSessionManager(database, strings.Repeat("s", 32), true, time.Hour)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	context.Request = httptest.NewRequest(http.MethodPost, "/login", nil)
+	if err := manager.Start(context, user); err != nil {
+		t.Fatal(err)
+	}
+	var sessionCookie *http.Cookie
+	for _, cookie := range recorder.Result().Cookies() {
+		if cookie.Name == "shipping_session" && cookie.Value != "" {
+			sessionCookie = cookie
+		}
+	}
+	if sessionCookie == nil || !sessionCookie.Secure || !sessionCookie.HttpOnly || sessionCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("insecure production session cookie: %#v", sessionCookie)
+	}
+
+	router, _, _ := portalTestRouter(t)
+	request := httptest.NewRequest(http.MethodGet, "/login", nil)
+	request.AddCookie(&http.Cookie{Name: "shipping_session", Value: "stale"})
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("stale cookie caused login redirect loop: %d", response.Code)
+	}
+}
+
+func TestLabelUsesCanonicalTrackingURLAndRedirectIgnoresFormID(t *testing.T) {
+	router, handler, database := portalTestRouter(t)
+	employee := createPortalUser(t, database, "employee@example.com", models.RoleEmployee, true)
+	shipment := models.Shipment{PublicID: "shp_label", ShipmentNumber: "S-LABEL", TrackingNumber: "TRK-LABEL", ExternalOrderID: "O-LABEL", ExternalCustomerID: "C-LABEL", BusinessKey: "shipment:O-LABEL", SourceService: "test", IdempotencyKey: "label-create", Status: models.StatusHandedOver, Carrier: "DHL", ServiceLevel: "standard", Version: 1}
+	if err := database.Create(&shipment).Error; err != nil {
+		t.Fatal(err)
+	}
+	cookie := loginPortal(t, router, employee.Email, "ValidPassword123", http.StatusFound)
+	request := httptest.NewRequest(http.MethodGet, "/shipments/"+strconv.Itoa(int(shipment.ID))+"/label", nil)
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "https://pehlione-shipping.com/track/TRK-LABEL") {
+		t.Fatalf("label canonical URL missing: %d %s", response.Code, response.Body.String())
+	}
+
+	form := url.Values{"csrf_token": {handler.sessions.CSRFToken(cookie.Value)}, "numeric_id": {"999999"}, "expected_status": {string(models.StatusHandedOver)}, "status": {string(models.StatusReceivedAtOrigin)}}
+	response = portalFormRequest(router, http.MethodPost, "/shipments/"+shipment.PublicID+"/status", cookie, form)
+	if response.Code != http.StatusSeeOther || response.Header().Get("Location") != "/shipments/"+strconv.Itoa(int(shipment.ID)) {
+		t.Fatalf("transition trusted forged redirect id: %d %s", response.Code, response.Header().Get("Location"))
+	}
+}
+
 func portalTestRouter(t *testing.T) (*gin.Engine, *Handler, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -167,4 +276,13 @@ func loginPortal(t *testing.T, router http.Handler, email, password string, want
 		}
 	}
 	return &http.Cookie{Name: "shipping_session", Value: "invalid"}
+}
+
+func portalFormRequest(router http.Handler, method, target string, cookie *http.Cookie, form url.Values) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, target, strings.NewReader(form.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
 }
