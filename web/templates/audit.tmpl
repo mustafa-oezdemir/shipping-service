@@ -1,1 +1,44 @@
-{{define "audit.tmpl"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Audit log</title><link rel="stylesheet" href="/static/site.css"></head><body>{{template "portal_nav" .}}<main><header><p class="eyebrow">Administration</p><h1>Audit log</h1></header><form method="get" class="filters"><label>User ID<input name="user"></label><label>Action<input name="action"></label><label>Entity<input name="entity_type"></label><label>Date<input type="date" name="date"></label><button>Filter</button></form><section class="panel"><table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Entity</th><th>Change</th><th>Request</th></tr></thead><tbody>{{range .Logs}}<tr><td>{{.CreatedAt.Format "02 Jan 2006 15:04:05"}}</td><td>{{.ActorID}}</td><td>{{.Action}}</td><td>{{.EntityType}} {{.EntityID}}</td><td>{{.OldValue}} → {{.NewValue}}</td><td>{{.RequestID}}</td></tr>{{else}}<tr><td colspan="6">No audit records found.</td></tr>{{end}}</tbody></table><div class="pagination">{{if gt .Page 1}}<a href="?page={{sub .Page 1}}">Previous</a>{{end}}<a href="?page={{add .Page 1}}">Next</a></div></section></main></body></html>{{end}}
+{{ define "audit.tmpl" }}
+<!doctype html><html lang="en">
+	<head><meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>Audit log</title><link rel="stylesheet" href="/static/site.css">
+	</head>
+	<body>{{ template "portal_nav" . }}<main>
+			<header><p class="eyebrow">Administration</p>
+				<h1>Audit log</h1>
+			</header><form method="get" class="filters">
+				<label>User ID<input name="user"></label>
+				<label>Action<input name="action"></label>
+				<label>Entity<input name="entity_type"></label>
+				<label>Date<input type="date" name="date"></label>
+				<button>Filter</button>
+			</form><section class="panel">
+				<table>
+					<thead><tr>
+							<th>Time</th>
+							<th>User</th>
+							<th>Action</th>
+							<th>Entity</th>
+							<th>Change</th>
+							<th>Request</th>
+						</tr>
+					</thead>
+					<tbody>
+						{{ range .Logs }}<tr>
+								<td>{{ .CreatedAt.Format "02 Jan 2006 15:04:05" }}</td>
+								<td>{{ .ActorID }}</td><td>{{ .Action }}</td>
+								<td>{{ .EntityType }} {{ .EntityID }}</td><td>{{ .OldValue }} → {{ .NewValue }}</td>
+								<td>{{ .RequestID }}</td>
+							</tr>
+						{{ else }}<tr><td colspan="6">No audit records found.</td>
+							</tr>
+						{{ end }}</tbody>
+				</table>
+				<div class="pagination">{{ if gt .Page 1 }}<a href="?page={{ sub .Page 1 }}">Previous</a>{{ end }}<a href="?page={{ add .Page 1 }}">Next</a>
+				</div>
+			</section>
+		</main>
+	</body>
+</html>
+{{ end }}

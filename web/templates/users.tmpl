@@ -1,1 +1,56 @@
-{{define "users.tmpl"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Personnel</title><link rel="stylesheet" href="/static/site.css"></head><body>{{template "portal_nav" .}}<main><header class="split"><div><p class="eyebrow">Administration</p><h1>Personnel</h1></div><a class="button" href="/admin/users/new">Create user</a></header><section class="panel"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th>Created</th></tr></thead><tbody>{{range .Users}}<tr><td><a href="/admin/users/{{.ID}}">{{.FirstName}} {{.LastName}}</a></td><td>{{.Email}}</td><td><span class="badge">{{.Role}}</span></td><td>{{if .IsActive}}Active{{else}}Inactive{{end}}</td><td>{{if .LastLoginAt}}{{.LastLoginAt.Format "02 Jan 2006 15:04"}}{{else}}Never{{end}}</td><td>{{.CreatedAt.Format "02 Jan 2006"}}</td></tr>{{else}}<tr><td colspan="6">No personnel.</td></tr>{{end}}</tbody></table><div class="pagination">{{if gt .Page 1}}<a href="?page={{sub .Page 1}}">Previous</a>{{end}}<a href="?page={{add .Page 1}}">Next</a></div></section></main></body></html>{{end}}
+{{ define "users.tmpl" }}
+<!doctype html><html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>Personnel</title>
+		<link rel="stylesheet" href="/static/site.css">
+	</head><body>{{ template "portal_nav" . }}<main>
+			<header class="split">
+				<div><p class="eyebrow">Administration</p>
+					<h1>Personnel</h1>
+				</div>
+				<a class="button" href="/admin/users/new">Create user</a>
+			</header>
+			<section class="panel">
+				<table>
+					<thead>
+						<tr>
+							<th>Name</th>
+							<th>Email</th>
+							<th>Role</th>
+							<th>Status</th>
+							<th>Last login</th>
+							<th>Created</th>
+						</tr>
+					</thead>
+					<tbody>
+						{{ range .Users }}
+							<tr>
+								<td>
+									<a href="/admin/users/{{ .ID }}">{{ .FirstName }} {{ .LastName }}</a>
+								</td>
+								<td>{{ .Email }}</td>
+								<td>
+									<span class="badge">{{ .Role }}</span>
+								</td>
+								<td>{{ if .IsActive }}Active{{ else }}Inactive{{ end }}</td>
+								<td>{{ if .LastLoginAt }}{{ .LastLoginAt.Format "02 Jan 2006 15:04" }}{{ else }}Never{{ end }}</td>
+								<td>{{ .CreatedAt.Format "02 Jan 2006" }}</td>
+							</tr>
+						{{ else }}<tr>
+								<td colspan="6">No personnel.</td>
+							</tr>
+						{{ end }}</tbody>
+				</table>
+				<div class="pagination">
+					{{ if gt .Page 1 }}
+						<a href="?page={{ sub .Page 1 }}">Previous</a>
+					{{ end }}
+					<a href="?page={{ add .Page 1 }}">Next</a>
+				</div>
+			</section>
+		</main>
+	</body>
+</html>
+{{ end }}

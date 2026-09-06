@@ -1,4 +1,33 @@
 {{ define "label.tmpl" }}
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Shipping label</title><link rel="stylesheet" href="/static/site.css"></head>
-	<body class="label"><main><h1>NordShop shipping label</h1><div class="address"><strong>Sender</strong><br>{{ .Shipment.Sender.Company }}<br>{{ .Shipment.Sender.Street }} {{ .Shipment.Sender.HouseNumber }}<br>{{ .Shipment.Sender.PostalCode }} {{ .Shipment.Sender.City }}<br>{{ .Shipment.Sender.CountryCode }}</div><div class="address"><strong>Recipient</strong><br>{{ .Shipment.Recipient.FirstName }} {{ .Shipment.Recipient.LastName }}<br>{{ .Shipment.Recipient.Company }}<br>{{ .Shipment.Recipient.Street }} {{ .Shipment.Recipient.HouseNumber }}<br>{{ .Shipment.Recipient.PostalCode }} {{ .Shipment.Recipient.City }}<br>{{ .Shipment.Recipient.CountryCode }}</div><p class="tracking">{{ .Shipment.TrackingNumber }}</p><img src="/qr/{{ .Shipment.TrackingNumber }}" alt="Tracking QR code"><p>{{ .TrackingURL }}</p></main></body></html>
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Shipping label</title>
+		<link rel="stylesheet" href="/static/site.css">
+	</head>
+	<body class="label">
+		<main>
+			<h1>PehliOne shipping label</h1>
+			<div class="address">
+				<strong>Sender</strong><br>
+				{{ .Shipment.Sender.Company }}<br>
+				{{ .Shipment.Sender.Street }} {{ .Shipment.Sender.HouseNumber }}<br>
+				{{ .Shipment.Sender.PostalCode }} {{ .Shipment.Sender.City }}<br>
+				{{ .Shipment.Sender.CountryCode }}
+			</div>
+			<div class="address">
+				<strong>Recipient</strong><br>
+				{{ .Shipment.Recipient.FirstName }} {{ .Shipment.Recipient.LastName }}<br>
+				{{ .Shipment.Recipient.Company }}<br>
+				{{ .Shipment.Recipient.Street }} {{ .Shipment.Recipient.HouseNumber }}<br>
+				{{ .Shipment.Recipient.PostalCode }} {{ .Shipment.Recipient.City }}<br>
+				{{ .Shipment.Recipient.CountryCode }}
+			</div>
+			<p class="tracking">{{ .Shipment.TrackingNumber }}</p>
+			<img src="/qr/{{ .Shipment.TrackingNumber }}" alt="Tracking QR code">
+			<p>{{ .TrackingURL }}</p>
+		</main>
+	</body>
+</html>
 {{ end }}

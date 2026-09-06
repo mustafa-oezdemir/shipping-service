@@ -2,12 +2,14 @@
 <!doctype html><html lang="en">
 	<head><meta charset="utf-8">
 		<meta name="viewport" content="width=device-width,initial-scale=1">
-		<title>QR Scanner</title><link rel="stylesheet" href="/static/site.css">
+		<title>QR Scanner</title>
+		<link rel="stylesheet" href="/static/site.css">
 <script src="/static/scan.js" defer></script>
 	</head>
 	<body>{{ template "portal_nav" . }}<main>
 			<header><p class="eyebrow">Secure personnel operation</p>
-				<h1>Scan shipment QR</h1><p>Camera access requires HTTPS in production.</p>
+				<h1>Scan shipment QR</h1>
+				<p>Camera access requires HTTPS in production.</p>
 			</header>
 			<section class="panel scan">
 				<video id="scanner" playsinline></video>

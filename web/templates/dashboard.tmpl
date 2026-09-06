@@ -1,4 +1,43 @@
 {{ define "dashboard.tmpl" }}
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shipping operations</title><link rel="stylesheet" href="/static/site.css"></head>
-	<body><main><h1>Shipping operations</h1><table><thead><tr><th>Tracking</th><th>Order</th><th>Recipient</th><th>Status</th><th>ETA</th></tr></thead><tbody>{{ range .Shipments }}<tr><td><a href="/shipments/{{ .ID }}">{{ .TrackingNumber }}</a></td><td>{{ .ExternalOrderID }}</td><td>{{ .Recipient.FirstName }} {{ .Recipient.LastName }}</td><td>{{ .Status }}</td><td>{{ if .EstimatedFrom }}{{ .EstimatedFrom.Format "02 Jan 15:04" }}{{ end }}</td></tr>{{ else }}<tr><td colspan="5">No shipments yet.</td></tr>{{ end }}</tbody></table></main></body></html>
+<!doctype html><html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>Shipping operations</title>
+		<link rel="stylesheet" href="/static/site.css">
+	</head>
+	<body>
+		<main>
+			<h1>Shipping operations</h1>
+			<table>
+				<thead>
+					<tr>
+						<th>Tracking</th>
+						<th>Order</th>
+						<th>Recipient</th>
+						<th>Status</th>
+						<th>ETA</th>
+					</tr>
+				</thead>
+				<tbody>
+					{{ range .Shipments }}<tr>
+							<td>
+								<a href="/shipments/{{ .ID }}">{{ .TrackingNumber }}</a>
+							</td>
+							<td>{{ .ExternalOrderID }}</td>
+							<td>{{ .Recipient.FirstName }} {{ .Recipient.LastName }}</td>
+							<td>{{ .Status }}</td>
+							<td>{{ if .EstimatedFrom }}{{ .EstimatedFrom.Format "02 Jan 15:04" }}{{ end }}
+							</td>
+						</tr>
+					{{ else }}
+						<tr>
+							<td colspan="5">No shipments yet.</td>
+						</tr>
+					{{ end }}
+				</tbody>
+			</table>
+		</main>
+	</body>
+</html>
 {{ end }}

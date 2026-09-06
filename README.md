@@ -83,7 +83,7 @@ Focused endpoints:
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/api/v1/shipments` | Create or idempotently replay an outbound shipment |
+| `POST` | `/api/v1/shipments` | Accept an E-Commerce handover, enter `handed_over`, or idempotently replay it |
 | `GET` | `/api/v1/shipments/:trackingNumber` | JSON tracking summary without recipient PII |
 | `GET` | `/api/v1/shipments/order/:orderID` | E-commerce order → shipment lookup |
 | `GET` | `/api/v1/shipments/:trackingNumber/events` | Tracking timeline/events |
@@ -159,6 +159,61 @@ docker compose up --build
 - Host access: `http://localhost:8090`
 - Container-to-container access: use Docker DNS such as `http://shipping-app:8090`
 - Callback URLs should target the e-commerce container/service, not `localhost`, when both run in Docker
+
+## URL reference
+
+Shipping runs on port `8090`; the main E-Commerce application runs on port `8080`.
+
+### Local browser URLs
+
+| Page | URL | Access |
+| --- | --- | --- |
+| Shipping home | <http://localhost:8090/> | Public |
+| Personnel login | <http://localhost:8090/login> | Public |
+| Employee dashboard | <http://localhost:8090/dashboard> | Employee or admin session |
+| Shipments | <http://localhost:8090/shipments> | Employee or admin session |
+| Returns | <http://localhost:8090/returns> | Employee or admin session |
+| QR scanner | <http://localhost:8090/scan> | Employee or admin session |
+| Profile | <http://localhost:8090/profile> | Employee or admin session |
+| Admin dashboard | <http://localhost:8090/admin/dashboard> | Admin session |
+| Admin shipments | <http://localhost:8090/admin/shipments> | Admin session |
+| User management | <http://localhost:8090/admin/users> | Admin session |
+| New user | <http://localhost:8090/admin/users/new> | Admin session |
+| Audit log | <http://localhost:8090/admin/audit> | Admin session |
+| Health check | <http://localhost:8090/health> | Public |
+| Readiness check | <http://localhost:8090/ready> | Public |
+| Main E-Commerce application | <http://localhost:8080/> | Separate application |
+
+Resource URLs contain a real identifier:
+
+- Public tracking: `http://localhost:8090/track/{trackingNumber}`
+- Public tracking QR: `http://localhost:8090/qr/{trackingNumber}`
+- Shipment detail: `http://localhost:8090/shipments/{shipmentID}`
+- Shipment label: `http://localhost:8090/shipments/{shipmentID}/label`
+- Return detail: `http://localhost:8090/returns/{returnID}`
+- Admin user detail: `http://localhost:8090/admin/users/{userID}`
+
+### Internal API URLs
+
+The local host API base URL is `http://localhost:8090/api/v1`. Calls require the service bearer token; write operations also require the documented idempotency and role headers.
+
+- Create shipment: `POST http://localhost:8090/api/v1/shipments`
+- Shipment by tracking number: `GET http://localhost:8090/api/v1/shipments/{trackingNumber}`
+- Shipment events: `GET http://localhost:8090/api/v1/shipments/{trackingNumber}/events`
+- Shipment by E-Commerce order: `GET http://localhost:8090/api/v1/shipments/order/{orderID}`
+- Create return: `POST http://localhost:8090/api/v1/returns`
+- Return by tracking number: `GET http://localhost:8090/api/v1/returns/{trackingNumber}`
+
+When both applications run in Docker, E-Commerce must call `http://shipping-app:8090`; Shipping must call E-Commerce at `http://ecommerce-app:8080`. These Docker DNS names are not browser URLs.
+
+### Production URLs
+
+- Shipping portal and public tracking: <https://pehlione-shipping.com>
+- Personnel login: <https://pehlione-shipping.com/login>
+- Admin dashboard: <https://pehlione-shipping.com/admin/dashboard>
+- Main E-Commerce application: <https://pehlione-ecommerce.com>
+
+Production API paths use `https://pehlione-shipping.com/api/v1/...`. Keep the internal API protected by service authentication; it is not a public browser API.
 
 ## Production deployment
 

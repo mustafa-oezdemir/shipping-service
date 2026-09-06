@@ -4,14 +4,25 @@
 		<main>
 			<h1>Track shipment</h1>
 			<p class="tracking">{{ .Shipment.TrackingNumber }}</p>
-			<p><strong>{{ .Shipment.Status }}</strong></p>{{ if .Shipment.EstimatedFrom }}<p>Estimated delivery: {{ .Shipment.EstimatedFrom.Format "02 Jan 2006 15:04 MST" }}</p>{{ end }}{{ if .Shipment.RemainingStops }}<p>{{ .Shipment.RemainingStops }} stops remaining</p>{{ end }}
+			<p>
+				<strong>{{ .Shipment.Status }}</strong>
+			</p>
+			{{ if .Shipment.EstimatedFrom }}
+				<p>Estimated delivery: {{ .Shipment.EstimatedFrom.Format "02 Jan 2006 15:04 MST" }}</p>
+			{{ end }}
+			{{ if .Shipment.RemainingStops }}
+				<p>{{ .Shipment.RemainingStops }} stops remaining</p>
+			{{ end }}
 			<h2>Timeline</h2>
 			<ol>
 				{{ range .Shipment.Events }}
 					<li>
-						<strong>{{ .Title }}</strong><br>
+						<strong>{{ .Title }}</strong>
+						<br>
 						<small>{{ .OccurredAt.Format "02 Jan 2006 15:04 MST" }}</small>
-                        {{ if .Description }}<br>{{ .Description }}{{ end }}</li>
+						{{ if .Description }}
+							<br>{{ .Description }}
+						{{ end }}</li>
 				{{ end }}</ol>
 		</main>
 	</body>

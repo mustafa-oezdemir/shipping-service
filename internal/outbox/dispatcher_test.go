@@ -28,7 +28,7 @@ func TestDispatcherRetriesAndMarksDelivered(t *testing.T) {
 	if err := database.Where("shipment_id = ?", shipment.ID).Delete(&models.OutboxEvent{}).Error; err != nil {
 		t.Fatalf("remove creation outbox event: %v", err)
 	}
-	_, _, err = service.Transition(context.Background(), shipment.PublicID, models.StatusCreated, models.StatusLabelCreated, models.RoleShippingAdmin, "ops-1", "status-1", "req-status-1", "shipping-service")
+	_, _, err = service.Transition(context.Background(), shipment.PublicID, models.StatusHandedOver, models.StatusReceivedAtOrigin, models.RoleShippingAdmin, "ops-1", "status-1", "req-status-1", "shipping-service")
 	if err != nil {
 		t.Fatalf("transition shipment: %v", err)
 	}

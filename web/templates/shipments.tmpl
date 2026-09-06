@@ -1,1 +1,53 @@
-{{define "shipments.tmpl"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shipments</title><link rel="stylesheet" href="/static/site.css"></head><body>{{template "portal_nav" .}}<main><header><p class="eyebrow">Operations</p><h1>{{if .Admin}}All shipments{{else}}Shipments{{end}}</h1></header><form method="get" class="filters"><label>Status<input name="status" value=""></label><button>Filter</button></form><section class="panel"><table><thead><tr><th>Tracking</th><th>Order</th><th>Recipient</th><th>Status</th><th>Updated</th></tr></thead><tbody>{{range .Shipments}}<tr><td><a href="/shipments/{{.ID}}">{{.TrackingNumber}}</a></td><td>{{.ExternalOrderID}}</td><td>{{.Recipient.FirstName}} {{.Recipient.LastName}}</td><td><span class="badge">{{.Status}}</span></td><td>{{.UpdatedAt.Format "02 Jan 15:04"}}</td></tr>{{else}}<tr><td colspan="5">No shipments found.</td></tr>{{end}}</tbody></table><div class="pagination">{{if gt .Page 1}}<a href="?page={{sub .Page 1}}">Previous</a>{{end}}<a href="?page={{add .Page 1}}">Next</a></div></section></main></body></html>{{end}}
+{{ define "shipments.tmpl" }}
+<!doctype html><html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>Shipments</title>
+		<link rel="stylesheet" href="/static/site.css">
+	</head>
+	<body>{{ template "portal_nav" . }}<main>
+			<header>
+				<p class="eyebrow">Operations</p>
+				<h1>{{ if .Admin }}All shipments{{ else }}Shipments{{ end }}</h1>
+			</header>
+			<form method="get" class="filters">
+				<label>Status<input name="status" value=""></label>
+				<button>Filter</button>
+			</form>
+			<section class="panel"><table>
+					<thead>
+						<tr>
+							<th>Tracking</th>
+							<th>Order</th>
+							<th>Recipient</th>
+							<th>Status</th>
+							<th>Updated</th>
+						</tr>
+					</thead>
+					<tbody>
+						{{ range .Shipments }}<tr>
+								<td>
+									<a href="/shipments/{{ .ID }}">{{ .TrackingNumber }}</a>
+								</td>
+								<td>{{ .ExternalOrderID }}</td>
+								<td>{{ .Recipient.FirstName }} {{ .Recipient.LastName }}</td>
+								<td>
+									<span class="badge">{{ .Status }}</span>
+								</td>
+								<td>{{ .UpdatedAt.Format "02 Jan 15:04" }}</td>
+							</tr>
+						{{ else }}<tr>
+								<td colspan="5">No shipments found.</td>
+							</tr>
+						{{ end }}</tbody>
+				</table>
+				<div class="pagination">{{ if gt .Page 1 }}
+                <a href="?page={{ sub .Page 1 }}">Previous</a>{{ end }}
+                <a href="?page={{ add .Page 1 }}">Next</a>
+				</div>
+			</section>
+		</main>
+	</body>
+</html>
+{{ end }}

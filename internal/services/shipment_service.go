@@ -72,6 +72,7 @@ type ShipmentEventInput struct {
 
 type CallbackPayload struct {
 	EventID           string                 `json:"event_id"`
+	EventType         string                 `json:"event_type"`
 	ShipmentID        string                 `json:"shipment_id"`
 	OrderID           string                 `json:"order_id"`
 	TrackingNumber    string                 `json:"tracking_number"`
@@ -139,7 +140,7 @@ func (service *ShipmentService) Create(ctx context.Context, input CreateShipment
 			BusinessKey:        businessKey,
 			SourceService:      sourceService,
 			IdempotencyKey:     strings.TrimSpace(idempotencyKey),
-			Status:             models.StatusCreated,
+			Status:             models.StatusHandedOver,
 			Carrier:            strings.TrimSpace(input.Carrier),
 			ServiceLevel:       strings.TrimSpace(input.ServiceLevel),
 			Recipient:          normalizeAddress(input.Recipient),
@@ -172,10 +173,11 @@ func (service *ShipmentService) Create(ctx context.Context, input CreateShipment
 			RequestID:         requestID,
 			ActorType:         sourceService,
 			ActorID:           strings.TrimSpace(input.CustomerID),
-			Status:            models.StatusCreated,
-			EventType:         "shipment_created",
-			Title:             "Shipment created",
-			IdempotencyKey:    idempotencyKey + "/created",
+			OldStatus:         models.StatusCreated,
+			Status:            models.StatusHandedOver,
+			EventType:         "shipment_handed_over",
+			Title:             "Order handed to shipping",
+			IdempotencyKey:    idempotencyKey + "/handed-over",
 			OccurredAt:        time.Now().UTC(),
 			CreateOutboxEvent: true,
 		})
@@ -578,7 +580,7 @@ func (service *ShipmentService) recordEvent(transaction *gorm.DB, shipment *mode
 		return nil, err
 	}
 	if input.CreateOutboxEvent {
-		payload := CallbackPayload{EventID: event.EventID, ShipmentID: shipment.PublicID, OrderID: shipment.ExternalOrderID, TrackingNumber: shipment.TrackingNumber, ShipmentType: shipmentType(shipment.IsReturn), Status: string(input.Status), StatusLabel: statusTitle(input.Status), RemainingStops: input.RemainingStops, OccurredAt: event.OccurredAt}
+		payload := CallbackPayload{EventID: event.EventID, EventType: strings.TrimSpace(input.EventType), ShipmentID: shipment.PublicID, OrderID: shipment.ExternalOrderID, TrackingNumber: shipment.TrackingNumber, ShipmentType: shipmentType(shipment.IsReturn), Status: string(input.Status), StatusLabel: statusTitle(input.Status), RemainingStops: input.RemainingStops, OccurredAt: event.OccurredAt}
 		if payload.RemainingStops == nil {
 			payload.RemainingStops = shipment.RemainingStops
 		}

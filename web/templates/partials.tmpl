@@ -1,2 +1,45 @@
-{{define "portal_nav"}}<nav><a class="brand" href="/dashboard">Pehlione Shipping</a><div><a href="/dashboard">Dashboard</a><a href="/shipments">Shipments</a><a href="/scan">QR Scanner</a><a href="/returns">Returns</a>{{if eq .User.Role "admin"}}<a href="/admin/dashboard">Admin</a><a href="/admin/users">Users</a><a href="/admin/audit">Audit</a>{{end}}<a href="/profile">{{.User.FirstName}} {{.User.LastName}} <span class="badge">{{.User.Role}}</span></a><form method="post" action="/logout" class="inline"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><button class="link" type="submit">Logout</button></form></div></nav>{{end}}
-{{define "activity_table"}}<table><thead><tr><th>Time</th><th>Action</th><th>Entity</th></tr></thead><tbody>{{range .}}<tr><td>{{.CreatedAt.Format "02 Jan 15:04"}}</td><td>{{.Action}}</td><td>{{.EntityType}} {{.EntityID}}</td></tr>{{else}}<tr><td colspan="3">No recent activity.</td></tr>{{end}}</tbody></table>{{end}}
+{{ define "portal_nav" }}
+<nav>
+	<a class="brand" href="/dashboard">Pehlione Shipping</a>
+	<div>
+		<a href="/dashboard">Dashboard</a>
+		<a href="/shipments">Shipments</a>
+		<a href="/scan">QR Scanner</a>
+		<a href="/returns">Returns</a>
+		{{ if eq .User.Role "admin" }}
+			<a href="/admin/dashboard">Admin</a>
+			<a href="/admin/users">Users</a>
+			<a href="/admin/audit">Audit</a>
+		{{ end }}
+		<a href="/profile">{{ .User.FirstName }} {{ .User.LastName }} <span class="badge">{{ .User.Role }}</span></a>
+		<form method="post" action="/logout" class="inline">
+			<input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+			<button class="link" type="submit">Logout</button>
+		</form>
+	</div>
+</nav>
+{{ end }}
+{{ define "activity_table" }}<table>
+	<thead>
+		<tr>
+			<th>Time</th>
+			<th>Action</th>
+			<th>Entity</th>
+		</tr>
+	</thead>
+	<tbody>
+		{{ range . }}
+			<tr>
+				<td>{{ .CreatedAt.Format "02 Jan 15:04" }}</td>
+				<td>{{ .Action }}</td>
+				<td>
+					{{ .EntityType }} {{ .EntityID }}</td>
+			</tr>
+		{{ else }}
+			<tr>
+				<td colspan="3">No recent activity.</td>
+			</tr>
+		{{ end }}
+	</tbody>
+</table>
+{{ end }}

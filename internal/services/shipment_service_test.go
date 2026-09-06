@@ -58,6 +58,9 @@ func TestCreateShipmentIsIdempotent(t *testing.T) {
 	if !created {
 		t.Fatal("first shipment should be marked created")
 	}
+	if first.Status != models.StatusHandedOver {
+		t.Fatalf("e-commerce handover must enter the waiting-for-receipt queue, got %s", first.Status)
+	}
 	second, created, err := service.Create(context.Background(), input, "idem-17", "ecommerce-gin", "req-17")
 	if err != nil {
 		t.Fatalf("replay shipment creation: %v", err)
@@ -74,6 +77,10 @@ func TestCreateShipmentIsIdempotent(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected 1 shipment, got %d", count)
+	}
+	var events int64
+	if err := database.Model(&models.ShipmentEvent{}).Where("shipment_id = ? AND status = ?", first.ID, models.StatusHandedOver).Count(&events).Error; err != nil || events != 1 {
+		t.Fatalf("expected one handed-over event, got %d: %v", events, err)
 	}
 }
 

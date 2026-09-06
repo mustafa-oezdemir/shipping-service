@@ -1,1 +1,29 @@
-{{ define "login.tmpl" }}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shipping Portal Login</title><link rel="stylesheet" href="/static/site.css"></head><body class="login-page"><main class="login-card"><div class="brand">Pehlione Shipping</div><h1>Operations Portal</h1><p class="muted">Sign in with your personnel account.</p>{{if .Error}}<div class="alert">{{.Error}}</div>{{end}}<form method="post" action="/login"><input type="hidden" name="csrf_token" value="{{.CSRF}}"><label>Email<input type="email" name="email" autocomplete="username" required maxlength="254"></label><label>Password<input type="password" name="password" autocomplete="current-password" required maxlength="72"></label><button type="submit">Sign in</button></form></main></body></html>{{end}}
+{{ define "login.tmpl" }}
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>Shipping Portal Login</title>
+		<link rel="stylesheet" href="/static/site.css">
+	</head>
+	<body class="login-page">
+		<main class="login-card">
+			<div class="brand">Pehlione Shipping</div>
+			<h1>Operations Portal</h1>
+			<p class="muted">Sign in with your personnel account.</p>
+			{{if .Error}}
+			<div class="alert">{{.Error}}</div>
+			{{end}}
+			<form method="post" action="/login">
+				<input type="hidden" name="csrf_token" value="{{.CSRF}}">
+				<label>Email<input type="email" name="email" autocomplete="username" required maxlength="254">
+				</label>
+				<label>Password<input type="password" name="password" autocomplete="current-password" required maxlength="72">
+				</label>
+				<button type="submit">Sign in</button>
+			</form>
+		</main>
+	</body>
+</html>
+{{end}}
