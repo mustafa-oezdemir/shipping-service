@@ -16,7 +16,7 @@ func NewTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite test db: %v", err)
 	}
-	if err := database.AutoMigrate(&models.Shipment{}, &models.ShipmentItem{}, &models.ShipmentEvent{}, &models.AuditLog{}, &models.OutboxEvent{}); err != nil {
+	if err := database.AutoMigrate(&models.Shipment{}, &models.ShipmentItem{}, &models.ShipmentEvent{}, &models.AuditLog{}, &models.OutboxEvent{}, &models.User{}, &models.BrowserSession{}); err != nil {
 		t.Fatalf("migrate sqlite test db: %v", err)
 	}
 	return database

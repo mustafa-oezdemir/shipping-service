@@ -32,6 +32,13 @@ type Config struct {
 	OutboxRetryBaseDelay       time.Duration
 	OutboxProcessingStaleAfter time.Duration
 	OutboxMaxAttempts          int
+	SessionSecret              string
+	SessionTTL                 time.Duration
+	ProfileImageDirectory      string
+	InitialAdminEmail          string
+	InitialAdminPassword       string
+	InitialAdminFirstName      string
+	InitialAdminLastName       string
 }
 
 type Warehouse struct {
@@ -96,6 +103,13 @@ func Load() (Config, error) {
 		OutboxRetryBaseDelay:       durationEnvironment("OUTBOX_RETRY_BASE_DELAY", 30*time.Second),
 		OutboxProcessingStaleAfter: durationEnvironment("OUTBOX_PROCESSING_STALE_AFTER", 2*time.Minute),
 		OutboxMaxAttempts:          intEnvironment("OUTBOX_MAX_ATTEMPTS", 8),
+		SessionSecret:              strings.TrimSpace(os.Getenv("SESSION_SECRET")),
+		SessionTTL:                 durationEnvironment("SESSION_TTL", 12*time.Hour),
+		ProfileImageDirectory:      environment("PROFILE_IMAGE_DIRECTORY", "./data/profile-images"),
+		InitialAdminEmail:          strings.ToLower(strings.TrimSpace(os.Getenv("INITIAL_ADMIN_EMAIL"))),
+		InitialAdminPassword:       os.Getenv("INITIAL_ADMIN_PASSWORD"),
+		InitialAdminFirstName:      environment("INITIAL_ADMIN_FIRST_NAME", "Shipping"),
+		InitialAdminLastName:       environment("INITIAL_ADMIN_LAST_NAME", "Administrator"),
 		Warehouse: Warehouse{
 			Name:        strings.TrimSpace(os.Getenv("WAREHOUSE_NAME")),
 			Company:     strings.TrimSpace(os.Getenv("WAREHOUSE_COMPANY")),
@@ -135,6 +149,15 @@ func Load() (Config, error) {
 	}
 	if config.OutboxMaxAttempts < 1 {
 		return Config{}, errors.New("OUTBOX_MAX_ATTEMPTS must be greater than zero")
+	}
+	if len(config.SessionSecret) < 32 {
+		return Config{}, errors.New("SESSION_SECRET must be at least 32 characters")
+	}
+	if config.SessionTTL < 15*time.Minute || config.SessionTTL > 7*24*time.Hour {
+		return Config{}, errors.New("SESSION_TTL must be between 15m and 168h")
+	}
+	if (config.InitialAdminEmail == "") != (config.InitialAdminPassword == "") {
+		return Config{}, errors.New("INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD must be set together")
 	}
 	return config, nil
 }

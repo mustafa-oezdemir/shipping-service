@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -136,12 +137,18 @@ type ShipmentEvent struct {
 
 type AuditLog struct {
 	gorm.Model
-	ShipmentID uint           `gorm:"not null;index"`
-	ActorType  string         `gorm:"size:40;not null"`
-	ActorID    string         `gorm:"size:64"`
-	Action     string         `gorm:"size:80;not null"`
-	OldStatus  ShipmentStatus `gorm:"size:50"`
-	NewStatus  ShipmentStatus `gorm:"size:50"`
+	ShipmentID  uint           `gorm:"not null;default:0;index"`
+	ActorUserID *uint          `gorm:"index"`
+	ActorType   string         `gorm:"size:40;not null"`
+	ActorID     string         `gorm:"size:64"`
+	Action      string         `gorm:"size:80;not null"`
+	EntityType  string         `gorm:"size:40;index"`
+	EntityID    string         `gorm:"size:64;index"`
+	OldValue    string         `gorm:"type:text"`
+	NewValue    string         `gorm:"type:text"`
+	RequestID   string         `gorm:"size:80;index"`
+	OldStatus   ShipmentStatus `gorm:"size:50"`
+	NewStatus   ShipmentStatus `gorm:"size:50"`
 }
 
 type OutboxEvent struct {
@@ -162,8 +169,46 @@ type OutboxEvent struct {
 type Role string
 
 const (
+	RoleAdmin             Role = "admin"
+	RoleEmployee          Role = "employee"
 	RoleShippingAdmin     Role = "shipping_admin"
 	RoleWarehouseEmployee Role = "warehouse_employee"
 	RoleDeliveryEmployee  Role = "delivery_employee"
 	RoleSupport           Role = "support"
 )
+
+func (role Role) IsPersonnelRole() bool { return role == RoleAdmin || role == RoleEmployee }
+
+type User struct {
+	gorm.Model
+	FirstName            string     `gorm:"size:100;not null"`
+	LastName             string     `gorm:"size:100;not null"`
+	Email                string     `gorm:"size:254;uniqueIndex;not null"`
+	PasswordHash         string     `gorm:"size:255;not null"`
+	Role                 Role       `gorm:"size:20;index;not null"`
+	ProfileImageFilename string     `gorm:"size:64;not null;default:''"`
+	IsActive             bool       `gorm:"not null;default:true;index"`
+	SecurityVersion      uint64     `gorm:"not null;default:1"`
+	LastLoginAt          *time.Time `gorm:"index"`
+}
+
+func (user User) FullName() string { return user.FirstName + " " + user.LastName }
+
+func (user User) Initials() string {
+	initials := ""
+	for _, value := range []string{user.FirstName, user.LastName} {
+		characters := []rune(strings.TrimSpace(value))
+		if len(characters) > 0 {
+			initials += strings.ToUpper(string(characters[0]))
+		}
+	}
+	return initials
+}
+
+type BrowserSession struct {
+	TokenHash       string    `gorm:"size:64;primaryKey"`
+	UserID          uint      `gorm:"not null;index"`
+	SecurityVersion uint64    `gorm:"not null"`
+	ExpiresAt       time.Time `gorm:"not null;index"`
+	CreatedAt       time.Time
+}

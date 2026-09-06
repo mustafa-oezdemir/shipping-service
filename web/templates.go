@@ -9,5 +9,6 @@ import (
 var files embed.FS
 
 func ParseTemplates() (*template.Template, error) {
-	return template.New("root").ParseFS(files, "templates/*.tmpl")
+	functions := template.FuncMap{"add": func(a, b int) int { return a + b }, "sub": func(a, b int) int { return a - b }}
+	return template.New("root").Funcs(functions).ParseFS(files, "templates/*.tmpl")
 }

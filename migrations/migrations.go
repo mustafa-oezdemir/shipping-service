@@ -16,6 +16,32 @@ type migration struct {
 var orderedMigrations = []migration{
 	{version: "000001_initial", apply: applyInitialSchema},
 	{version: "000002_api_v1_contract", apply: applyAPIContractUpgrade},
+	{version: "000003_personnel_portal", apply: applyPersonnelPortal},
+}
+
+func applyPersonnelPortal(transaction *gorm.DB) error {
+	if err := transaction.AutoMigrate(&models.User{}, &models.BrowserSession{}); err != nil {
+		return err
+	}
+	columns := []struct{ name, sql string }{
+		{"actor_user_id", "ALTER TABLE audit_logs ADD COLUMN actor_user_id BIGINT UNSIGNED NULL AFTER shipment_id"},
+		{"entity_type", "ALTER TABLE audit_logs ADD COLUMN entity_type VARCHAR(40) NULL AFTER action"},
+		{"entity_id", "ALTER TABLE audit_logs ADD COLUMN entity_id VARCHAR(64) NULL AFTER entity_type"},
+		{"old_value", "ALTER TABLE audit_logs ADD COLUMN old_value TEXT NULL AFTER entity_id"},
+		{"new_value", "ALTER TABLE audit_logs ADD COLUMN new_value TEXT NULL AFTER old_value"},
+		{"request_id", "ALTER TABLE audit_logs ADD COLUMN request_id VARCHAR(80) NULL AFTER new_value"},
+	}
+	for _, column := range columns {
+		if err := ensureColumn(transaction, &models.AuditLog{}, column.name, column.sql); err != nil {
+			return err
+		}
+	}
+	for _, index := range []string{"ActorUserID", "EntityType", "EntityID", "RequestID"} {
+		if err := ensureIndex(transaction, &models.AuditLog{}, index); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func Apply(database *gorm.DB) error {

@@ -16,6 +16,7 @@ import (
 	"github.com/mustafa-oezdemir/shipping-service/internal/middleware"
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
 	"github.com/mustafa-oezdemir/shipping-service/internal/outbox"
+	"github.com/mustafa-oezdemir/shipping-service/internal/portal"
 	"github.com/mustafa-oezdemir/shipping-service/internal/services"
 	"github.com/mustafa-oezdemir/shipping-service/web"
 )
@@ -37,7 +38,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	handler := handlers.New(services.NewShipmentService(shippingDatabase, appConfig.Warehouse), shippingDatabase, appConfig.PublicBaseURL)
+	shipmentService := services.NewShipmentService(shippingDatabase, appConfig.Warehouse)
+	handler := handlers.New(shipmentService, shippingDatabase, appConfig.PublicBaseURL)
+	if err := portal.BootstrapAdmin(shippingDatabase, appConfig.InitialAdminEmail, appConfig.InitialAdminPassword, appConfig.InitialAdminFirstName, appConfig.InitialAdminLastName); err != nil {
+		log.Fatal(err)
+	}
+	portalHandler, err := portal.New(shippingDatabase, shipmentService, appConfig.SessionSecret, appConfig.ProfileImageDirectory, appConfig.PublicBaseURL, appConfig.AppEnv == "production", appConfig.SessionTTL)
+	if err != nil {
+		log.Fatal(err)
+	}
 	dispatcher := outbox.NewDispatcher(shippingDatabase, outbox.Config{CallbackURL: appConfig.EcommerceCallbackURL, CallbackToken: appConfig.EcommerceCallbackToken, PollInterval: appConfig.OutboxPollInterval, RetryBaseDelay: appConfig.OutboxRetryBaseDelay, ProcessingStaleAfter: appConfig.OutboxProcessingStaleAfter, MaxAttempts: appConfig.OutboxMaxAttempts, RequestTimeout: appConfig.RequestTimeout, ServiceName: "shipping-service"})
 
 	router := gin.New()
@@ -53,6 +62,7 @@ func main() {
 	router.GET("/ready", handler.Ready)
 	router.GET("/track/:trackingNumber", handler.PublicTracking)
 	router.GET("/qr/:trackingNumber", handler.TrackingQR)
+	portalHandler.Register(router)
 
 	internal := router.Group("/api/v1")
 	internal.Use(middleware.RequireServiceToken(appConfig.ServiceTokens()...), middleware.NoStore())
@@ -65,10 +75,6 @@ func main() {
 
 	operations := router.Group("")
 	operations.Use(middleware.RequireServiceToken(appConfig.ServiceTokens()...), middleware.RequireRole(models.RoleShippingAdmin, models.RoleWarehouseEmployee, models.RoleDeliveryEmployee, models.RoleSupport), middleware.NoStore())
-	operations.GET("/dashboard", handler.Dashboard)
-	operations.GET("/shipments", handler.Dashboard)
-	operations.GET("/shipments/:id", handler.InternalShipment)
-	operations.GET("/shipments/:id/label", handler.Label)
 	operations.PATCH("/api/v1/shipments/:id/status", middleware.RequireIdempotencyKey(), handler.TransitionShipment)
 	operations.PATCH("/api/v1/shipments/:id/eta", middleware.RequireIdempotencyKey(), handler.UpdateETA)
 	operations.PATCH("/api/v1/shipments/:id/stops", middleware.RequireIdempotencyKey(), handler.UpdateStops)

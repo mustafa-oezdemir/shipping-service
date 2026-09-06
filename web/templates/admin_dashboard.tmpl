@@ -1,0 +1,16 @@
+{{ define "admin_dashboard.tmpl" }}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Shipping Administration</title><link rel="stylesheet" href="/static/site.css"></head>
+<body>{{template "portal_nav" .}}<main>
+<header><p class="eyebrow">Operations overview</p><h1>Shipping Administration</h1></header>
+<section class="stats">
+<article><strong>{{.TodayShipments}}</strong><span>Shipments today</span></article>
+<article><strong>{{.DeliveredToday}}</strong><span>Delivered today</span></article>
+<article><strong>{{.ActiveEmployees}}</strong><span>Active personnel</span></article>
+<article><strong>{{index .Counts "ready_for_pickup"}}</strong><span>Ready for pickup</span></article>
+<article><strong>{{index .Counts "in_transit"}}</strong><span>In transit</span></article>
+<article><strong>{{index .Counts "out_for_delivery"}}</strong><span>Out for delivery</span></article>
+<article><strong>{{index .Counts "delivery_failed"}}</strong><span>Failures</span></article>
+<article><strong>{{index .ReturnCounts "return_received"}}</strong><span>Returns received</span></article>
+</section>
+<div class="grid"><section class="panel"><h2>Recent activity</h2>{{template "activity_table" .Recent}}</section><section class="panel"><h2>Actions today</h2><table><thead><tr><th>Employee</th><th>Actions</th></tr></thead><tbody>{{range .Workload}}<tr><td>{{.FirstName}} {{.LastName}}</td><td>{{.Actions}}</td></tr>{{else}}<tr><td colspan="2">No activity today.</td></tr>{{end}}</tbody></table></section></div>
+</main></body></html>{{end}}

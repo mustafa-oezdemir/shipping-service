@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -407,7 +408,7 @@ func (service *ShipmentService) Transition(ctx context.Context, shipmentPublicID
 }
 
 func (service *ShipmentService) UpdateStops(ctx context.Context, shipmentPublicID string, stops int, actorRole models.Role, actorID, idempotencyKey, requestID, sourceService string) (*models.Shipment, bool, error) {
-	if (actorRole != models.RoleDeliveryEmployee && actorRole != models.RoleShippingAdmin) || stops < 0 {
+	if (actorRole != models.RoleDeliveryEmployee && actorRole != models.RoleShippingAdmin && actorRole != models.RoleAdmin && actorRole != models.RoleEmployee) || stops < 0 {
 		return nil, false, ErrForbidden
 	}
 	var shipment models.Shipment
@@ -449,7 +450,7 @@ func (service *ShipmentService) UpdateStops(ctx context.Context, shipmentPublicI
 }
 
 func (service *ShipmentService) UpdateETA(ctx context.Context, shipmentPublicID string, from, until *time.Time, actorRole models.Role, actorID, idempotencyKey, requestID, sourceService string) (*models.Shipment, bool, error) {
-	if actorRole != models.RoleShippingAdmin && actorRole != models.RoleSupport && actorRole != models.RoleDeliveryEmployee {
+	if actorRole != models.RoleShippingAdmin && actorRole != models.RoleSupport && actorRole != models.RoleDeliveryEmployee && actorRole != models.RoleAdmin && actorRole != models.RoleEmployee {
 		return nil, false, ErrForbidden
 	}
 	if from != nil && until != nil && until.Before(*from) {
@@ -492,7 +493,7 @@ func (service *ShipmentService) UpdateETA(ctx context.Context, shipmentPublicID 
 }
 
 func (service *ShipmentService) AddEvent(ctx context.Context, shipmentPublicID string, input ShipmentEventInput, actorRole models.Role, actorID, idempotencyKey, requestID, sourceService string) (*models.ShipmentEvent, error) {
-	if actorRole != models.RoleShippingAdmin && actorRole != models.RoleWarehouseEmployee && actorRole != models.RoleDeliveryEmployee && actorRole != models.RoleSupport {
+	if actorRole != models.RoleShippingAdmin && actorRole != models.RoleWarehouseEmployee && actorRole != models.RoleDeliveryEmployee && actorRole != models.RoleSupport && actorRole != models.RoleAdmin && actorRole != models.RoleEmployee {
 		return nil, ErrForbidden
 	}
 	if err := validateEventInput(input); err != nil {
@@ -568,7 +569,12 @@ func (service *ShipmentService) recordEvent(transaction *gorm.DB, shipment *mode
 	if err := transaction.Create(&event).Error; err != nil {
 		return nil, err
 	}
-	if err := transaction.Create(&models.AuditLog{ShipmentID: shipment.ID, ActorType: strings.TrimSpace(input.ActorType), ActorID: strings.TrimSpace(input.ActorID), Action: strings.TrimSpace(input.EventType), OldStatus: input.OldStatus, NewStatus: input.Status}).Error; err != nil {
+	var actorUserID *uint
+	if parsed, err := strconv.ParseUint(strings.TrimSpace(input.ActorID), 10, 64); err == nil && parsed > 0 && (input.ActorType == string(models.RoleAdmin) || input.ActorType == string(models.RoleEmployee)) {
+		value := uint(parsed)
+		actorUserID = &value
+	}
+	if err := transaction.Create(&models.AuditLog{ShipmentID: shipment.ID, ActorUserID: actorUserID, ActorType: strings.TrimSpace(input.ActorType), ActorID: strings.TrimSpace(input.ActorID), Action: strings.TrimSpace(input.EventType), EntityType: "shipment", EntityID: shipment.PublicID, RequestID: requestID, OldStatus: input.OldStatus, NewStatus: input.Status, OldValue: string(input.OldStatus), NewValue: string(input.Status)}).Error; err != nil {
 		return nil, err
 	}
 	if input.CreateOutboxEvent {
@@ -763,7 +769,7 @@ func warehouseAddress(warehouse config.Warehouse) models.AddressSnapshot {
 }
 
 func canManageStatus(role models.Role, status models.ShipmentStatus) bool {
-	if role == models.RoleShippingAdmin {
+	if role == models.RoleShippingAdmin || role == models.RoleAdmin || role == models.RoleEmployee {
 		return true
 	}
 	if role == models.RoleWarehouseEmployee {
