@@ -101,6 +101,7 @@ Each accepted status/ETA/stops/event mutation writes:
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_DSN` | Shipping database DSN |
+| `SHIPPING_HOST_PORT` | Docker host port for Shipping (default `8090`) |
 | `DATABASE_CONNECT_TIMEOUT` | Bounded startup retry window for the Shipping database |
 | `ECOMMERCE_TO_SHIPPING_TOKEN` | Current inbound internal API token |
 | `ECOMMERCE_TO_SHIPPING_PREVIOUS_TOKEN` | Optional previous inbound token during rotation |

@@ -45,7 +45,7 @@ services:
       WAREHOUSE_CITY: ${WAREHOUSE_CITY:-Marburg}
       WAREHOUSE_COUNTRY: ${WAREHOUSE_COUNTRY:-DE}
     ports:
-      - "${APP_PORT:-8090}:8090"
+      - "${SHIPPING_HOST_PORT:-8090}:8090"
 
 volumes:
   shipping_mysql:
