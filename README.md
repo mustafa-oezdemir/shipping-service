@@ -130,6 +130,7 @@ Each accepted status/ETA/stops/event mutation writes:
 | `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | Required values when neither explicit DSN is set |
 | `APP_ENV` | Runtime environment (`development`, `test`, or `production`) |
 | `APP_URL` | Canonical public tracking/QR origin; required and HTTPS-only in production |
+| `METRICS_PORT` | Private Prometheus listener (default `9092`; not published by Compose) |
 | `GIN_MODE` | Gin mode; must be `release` in production |
 | `TRUSTED_PROXIES` | Comma-separated proxy IPs/CIDRs |
 | `SHIPPING_HOST_PORT` | Docker host port for Shipping (default `8090`) |
@@ -172,6 +173,42 @@ docker compose up --build
 ```
 
 - Host access: `http://localhost:8090`
+
+## Monitoring & Observability
+
+Shipping participates in the existing E-Commerce Prometheus/Grafana stack; this repository intentionally does not start a second monitoring stack.
+
+```mermaid
+flowchart TD
+    P["Shared Prometheus"] -->|"app:9091/metrics"| E["ecommerce-gin"]
+    P -->|"shipping-app:9092/metrics"| S["shipping-service"]
+    P --> G["Shared Grafana"]
+    G --> ED["Ecommerce Overview"]
+    G --> SD["Shipping Service Overview"]
+    G --> CD["E-Commerce + Shipping Overview"]
+```
+
+Shipping exposes Prometheus metrics on the private `METRICS_PORT` listener. Compose uses `expose`, not a host `ports` mapping, so `/metrics` is reachable by Prometheus over `pehlione-backend` but is not served on the public application port. The public operational probes remain:
+
+- `GET /health/live` (`/health` and `/healthz` aliases): process liveness only; it does not restart the service because E-Commerce is temporarily unavailable.
+- `GET /health/ready` (`/ready` and `/readyz` aliases): checks the Shipping MySQL dependency.
+
+Key metric families include:
+
+- `shipping_http_*`: request count, status, duration and in-flight requests, labeled with Gin route templates rather than raw IDs.
+- `shipping_shipments_current`, `shipping_shipment_status_transitions_total`, `shipping_shipment_operations_total` and delivery-duration/failure metrics.
+- `shipping_returns_current`, `shipping_returns_created_total` and return transition metrics.
+- `shipping_ecommerce_callback_*`, `shipping_ecommerce_dependency_up`, `shipping_outbox_current`, `shipping_outbox_retry_total` and `shipping_outbox_oldest_pending_seconds`.
+- `shipping_api_auth_failures_total`, aggregate employee login results and aggregate QR scan results.
+- standard Go runtime/process metrics and `go_sql_*{db_name="shipping"}` connection-pool metrics.
+
+The shared configuration and provisioned assets live in the E-Commerce repository:
+
+- Prometheus scrape configuration: `monitoring/prometheus.yml`
+- alert rules: `monitoring/rules/shipping-alerts.yml`
+- dashboards: `monitoring/grafana/dashboards/shipping.json` and `platform-overview.json`
+
+Metrics contain aggregate controlled labels only. Tokens, cookies, request/event IDs, customer/order/shipment identifiers, tracking numbers, addresses, email addresses and employee IDs are not labels. Personnel-specific accountability remains in audit logs. In production, keep Prometheus and Grafana on an internal network, VPN or protected administrative endpoint; only the Shipping application belongs behind the public `https://pehlione-shipping.com` origin.
 - Container-to-container access: use Docker DNS such as `http://shipping-app:8090`
 - The separate development stacks share only the external `pehlione-backend` network.
 - Callback URLs target `http://ecommerce-app:8080`; they never use `localhost` inside a container.
