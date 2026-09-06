@@ -114,7 +114,7 @@ func TestCreateShipmentReturnsVersionedJSONContract(t *testing.T) {
 		t.Fatalf("expected success envelope, got %v", envelope)
 	}
 	data := envelope["data"].(map[string]any)
-	if data["shipment_id"] == "" || data["tracking_number"] == "" || data["status"] != "handed_over" {
+	if data["shipment_id"] == "" || data["tracking_number"] == "" || data["status"] != "awaiting_receipt" {
 		t.Fatalf("unexpected shipment payload: %v", data)
 	}
 	if _, exists := data["recipient"]; exists {

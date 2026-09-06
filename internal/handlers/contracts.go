@@ -99,6 +99,7 @@ type shipmentResponse struct {
 	Status            string                     `json:"status"`
 	StatusLabel       string                     `json:"status_label"`
 	RemainingStops    *int                       `json:"remaining_stops,omitempty"`
+	DeliveredAt       *time.Time                 `json:"delivered_at,omitempty"`
 	EstimatedDelivery *estimatedDeliveryResponse `json:"estimated_delivery,omitempty"`
 }
 
@@ -147,7 +148,7 @@ func newCreatedShipmentResponse(shipment *models.Shipment, replay bool) createdS
 }
 
 func newShipmentResponse(shipment *models.Shipment) shipmentResponse {
-	return shipmentResponse{ShipmentID: shipment.PublicID, OrderID: shipment.ExternalOrderID, HandoverCode: shipmentHandoverCode(shipment), TrackingNumber: shipment.TrackingNumber, ShipmentType: shipmentTypeLabel(shipment.IsReturn), Status: string(shipment.Status), StatusLabel: statusLabel(shipment.Status), RemainingStops: shipment.RemainingStops, EstimatedDelivery: newEstimatedDeliveryResponse(shipment.EstimatedFrom, shipment.EstimatedUntil)}
+	return shipmentResponse{ShipmentID: shipment.PublicID, OrderID: shipment.ExternalOrderID, HandoverCode: shipmentHandoverCode(shipment), TrackingNumber: shipment.TrackingNumber, ShipmentType: shipmentTypeLabel(shipment.IsReturn), Status: string(shipment.Status), StatusLabel: statusLabel(shipment.Status), RemainingStops: shipment.RemainingStops, DeliveredAt: shipment.DeliveredAt, EstimatedDelivery: newEstimatedDeliveryResponse(shipment.EstimatedFrom, shipment.EstimatedUntil)}
 }
 
 func shipmentHandoverCode(shipment *models.Shipment) string {

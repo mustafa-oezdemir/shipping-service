@@ -19,6 +19,7 @@ import (
 	"github.com/mustafa-oezdemir/shipping-service/internal/portal"
 	"github.com/mustafa-oezdemir/shipping-service/internal/services"
 	"github.com/mustafa-oezdemir/shipping-service/web"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -60,6 +61,7 @@ func main() {
 	router.GET("/", handler.Index)
 	router.GET("/health", handler.Health)
 	router.GET("/ready", handler.Ready)
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	router.GET("/track/:trackingNumber", handler.PublicTracking)
 	router.GET("/qr/:trackingNumber", handler.TrackingQR)
 	portalHandler.Register(router)
@@ -70,6 +72,7 @@ func main() {
 	internal.GET("/shipments/order/:orderID", handler.GetShipmentForOrder)
 	internal.GET("/shipments/:trackingNumber/events", handler.ShipmentEvents)
 	internal.GET("/shipments/:trackingNumber", handler.GetShipmentByTracking)
+	internal.POST("/shipments/:id/cancel", middleware.RequireIdempotencyKey(), handler.CancelShipment)
 	internal.POST("/returns", middleware.RequireIdempotencyKey(), handler.CreateReturn)
 	internal.GET("/returns/:trackingNumber", handler.GetReturnByTracking)
 

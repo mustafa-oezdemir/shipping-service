@@ -12,25 +12,38 @@ type ShipmentStatus string
 type OutboxStatus string
 
 const (
-	StatusCreated               ShipmentStatus = "created"
-	StatusLabelCreated          ShipmentStatus = "label_created"
-	StatusReadyForPickup        ShipmentStatus = "ready_for_pickup"
-	StatusHandedOver            ShipmentStatus = "handed_over"
-	StatusReceivedAtOrigin      ShipmentStatus = "received_at_origin"
-	StatusSorting               ShipmentStatus = "sorting"
-	StatusInTransit             ShipmentStatus = "in_transit"
-	StatusArrivedDestinationHub ShipmentStatus = "arrived_at_destination_hub"
-	StatusOutForDelivery        ShipmentStatus = "out_for_delivery"
-	StatusDelivered             ShipmentStatus = "delivered"
-	StatusDeliveryFailed        ShipmentStatus = "delivery_failed"
-	StatusDeliveryRescheduled   ShipmentStatus = "delivery_rescheduled"
-	StatusReturnRequested       ShipmentStatus = "return_requested"
-	StatusReturnAuthorized      ShipmentStatus = "return_authorized"
-	StatusReturnLabelCreated    ShipmentStatus = "return_label_created"
-	StatusReturnInTransit       ShipmentStatus = "return_in_transit"
-	StatusReturnReceived        ShipmentStatus = "return_received"
-	StatusReturnCompleted       ShipmentStatus = "return_completed"
-	StatusCancelled             ShipmentStatus = "cancelled"
+	StatusCreated            ShipmentStatus = "created"
+	StatusLabelCreated       ShipmentStatus = "label_created"
+	StatusReadyForPickup     ShipmentStatus = "ready_for_pickup"
+	StatusAwaitingReceipt    ShipmentStatus = "awaiting_receipt"
+	StatusReceivedByShipping ShipmentStatus = "received_by_shipping"
+	StatusShipmentPrepared   ShipmentStatus = "shipment_prepared"
+	// Compatibility names keep existing callers source-compatible while the
+	// API exposes the domain terminology used by the current workflow.
+	StatusHandedOver                ShipmentStatus = StatusAwaitingReceipt
+	StatusReceivedAtOrigin          ShipmentStatus = StatusReceivedByShipping
+	StatusSorting                   ShipmentStatus = StatusShipmentPrepared
+	StatusInTransit                 ShipmentStatus = "in_transit"
+	StatusArrivedDestinationHub     ShipmentStatus = "arrived_at_destination_hub"
+	StatusOutForDelivery            ShipmentStatus = "out_for_delivery"
+	StatusDelivered                 ShipmentStatus = "delivered"
+	StatusDeliveryFailed            ShipmentStatus = "delivery_failed"
+	StatusDeliveryRescheduled       ShipmentStatus = "delivery_rescheduled"
+	StatusReturnRequested           ShipmentStatus = "return_requested"
+	StatusReturnAuthorized          ShipmentStatus = "return_authorized"
+	StatusReturnLabelCreated        ShipmentStatus = "return_label_created"
+	StatusWaitingCustomerHandover   ShipmentStatus = "waiting_for_customer_handover"
+	StatusReturnReceivedByShipping  ShipmentStatus = "return_received_by_shipping"
+	StatusReturnPrepared            ShipmentStatus = "return_prepared"
+	StatusReturnInTransit           ShipmentStatus = "return_in_transit"
+	StatusReturnReceivedAtWarehouse ShipmentStatus = "return_received_at_warehouse"
+	StatusReturnReceived            ShipmentStatus = StatusReturnReceivedAtWarehouse
+	StatusReturnCompleted           ShipmentStatus = "return_completed"
+	StatusReturnToSenderRequested   ShipmentStatus = "return_to_sender_requested"
+	StatusReturnToSenderPrepared    ShipmentStatus = "return_to_sender_prepared"
+	StatusReturnToSenderInTransit   ShipmentStatus = "return_to_sender_in_transit"
+	StatusReturnToSenderReceived    ShipmentStatus = "return_to_sender_received"
+	StatusCancelled                 ShipmentStatus = "cancelled"
 )
 
 const (
@@ -42,22 +55,28 @@ const (
 
 func (status ShipmentStatus) CanTransitionTo(next ShipmentStatus) bool {
 	transitions := map[ShipmentStatus]map[ShipmentStatus]bool{
-		StatusCreated:               {StatusLabelCreated: true, StatusCancelled: true},
-		StatusLabelCreated:          {StatusReadyForPickup: true, StatusCancelled: true},
-		StatusReadyForPickup:        {StatusHandedOver: true, StatusCancelled: true},
-		StatusHandedOver:            {StatusReceivedAtOrigin: true},
-		StatusReceivedAtOrigin:      {StatusSorting: true},
-		StatusSorting:               {StatusInTransit: true},
-		StatusInTransit:             {StatusArrivedDestinationHub: true},
-		StatusArrivedDestinationHub: {StatusOutForDelivery: true},
-		StatusOutForDelivery:        {StatusDelivered: true, StatusDeliveryFailed: true},
-		StatusDeliveryFailed:        {StatusDeliveryRescheduled: true, StatusReturnRequested: true},
-		StatusDeliveryRescheduled:   {StatusOutForDelivery: true, StatusReturnRequested: true},
-		StatusReturnRequested:       {StatusReturnAuthorized: true},
-		StatusReturnAuthorized:      {StatusReturnLabelCreated: true},
-		StatusReturnLabelCreated:    {StatusReturnInTransit: true},
-		StatusReturnInTransit:       {StatusReturnReceived: true},
-		StatusReturnReceived:        {StatusReturnCompleted: true},
+		StatusCreated:                  {StatusLabelCreated: true, StatusCancelled: true},
+		StatusLabelCreated:             {StatusReadyForPickup: true, StatusCancelled: true},
+		StatusReadyForPickup:           {StatusHandedOver: true, StatusCancelled: true},
+		StatusHandedOver:               {StatusReceivedAtOrigin: true, StatusCancelled: true},
+		StatusReceivedAtOrigin:         {StatusSorting: true, StatusReturnToSenderRequested: true},
+		StatusSorting:                  {StatusInTransit: true, StatusReturnToSenderRequested: true},
+		StatusInTransit:                {StatusArrivedDestinationHub: true, StatusReturnToSenderRequested: true},
+		StatusArrivedDestinationHub:    {StatusOutForDelivery: true, StatusReturnToSenderRequested: true},
+		StatusOutForDelivery:           {StatusDelivered: true, StatusDeliveryFailed: true, StatusReturnToSenderRequested: true},
+		StatusDeliveryFailed:           {StatusDeliveryRescheduled: true, StatusReturnToSenderRequested: true},
+		StatusDeliveryRescheduled:      {StatusOutForDelivery: true, StatusReturnToSenderRequested: true},
+		StatusReturnRequested:          {StatusReturnAuthorized: true},
+		StatusReturnAuthorized:         {StatusReturnLabelCreated: true},
+		StatusReturnLabelCreated:       {StatusWaitingCustomerHandover: true},
+		StatusWaitingCustomerHandover:  {StatusReturnReceivedByShipping: true},
+		StatusReturnReceivedByShipping: {StatusReturnPrepared: true},
+		StatusReturnPrepared:           {StatusReturnInTransit: true},
+		StatusReturnInTransit:          {StatusReturnReceivedAtWarehouse: true},
+		StatusReturnReceived:           {StatusReturnCompleted: true},
+		StatusReturnToSenderRequested:  {StatusReturnToSenderPrepared: true},
+		StatusReturnToSenderPrepared:   {StatusReturnToSenderInTransit: true},
+		StatusReturnToSenderInTransit:  {StatusReturnToSenderReceived: true},
 	}
 	return transitions[status][next]
 }

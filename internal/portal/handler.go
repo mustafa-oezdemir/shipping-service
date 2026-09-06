@@ -267,7 +267,7 @@ func (h *Handler) Shipment(c *gin.Context) {
 }
 
 func nextStatuses(status models.ShipmentStatus) []models.ShipmentStatus {
-	all := []models.ShipmentStatus{models.StatusReceivedAtOrigin, models.StatusSorting, models.StatusInTransit, models.StatusArrivedDestinationHub, models.StatusOutForDelivery, models.StatusDelivered, models.StatusDeliveryFailed, models.StatusDeliveryRescheduled, models.StatusReturnRequested, models.StatusReturnAuthorized, models.StatusReturnLabelCreated, models.StatusReturnInTransit, models.StatusReturnReceived, models.StatusReturnCompleted}
+	all := []models.ShipmentStatus{models.StatusReceivedAtOrigin, models.StatusSorting, models.StatusInTransit, models.StatusArrivedDestinationHub, models.StatusOutForDelivery, models.StatusDelivered, models.StatusDeliveryFailed, models.StatusDeliveryRescheduled, models.StatusReturnRequested, models.StatusReturnAuthorized, models.StatusReturnLabelCreated, models.StatusWaitingCustomerHandover, models.StatusReturnReceivedByShipping, models.StatusReturnPrepared, models.StatusReturnInTransit, models.StatusReturnReceivedAtWarehouse, models.StatusReturnCompleted, models.StatusReturnToSenderRequested, models.StatusReturnToSenderPrepared, models.StatusReturnToSenderInTransit, models.StatusReturnToSenderReceived}
 	result := []models.ShipmentStatus{}
 	for _, next := range all {
 		if status.CanTransitionTo(next) {

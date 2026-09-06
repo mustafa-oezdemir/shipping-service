@@ -85,6 +85,15 @@ func (handler *Handler) CreateReturn(context *gin.Context) {
 	httpapi.Success(context, status, newCreatedShipmentResponse(shipment, !created))
 }
 
+func (handler *Handler) CancelShipment(context *gin.Context) {
+	shipment, replayed, err := handler.service.Cancel(context.Request.Context(), context.Param("id"), context.GetHeader("Idempotency-Key"), middleware.CurrentRequestID(context), middleware.SourceService(context, "ecommerce-gin"))
+	if err != nil {
+		handler.respondError(context, err)
+		return
+	}
+	httpapi.Success(context, http.StatusOK, newCreatedShipmentResponse(shipment, replayed))
+}
+
 func (handler *Handler) GetShipmentForOrder(context *gin.Context) {
 	shipment, err := handler.service.GetByOrder(context.Request.Context(), context.Param("orderID"))
 	if err != nil {

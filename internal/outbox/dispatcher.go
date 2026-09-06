@@ -3,13 +3,16 @@ package outbox
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"time"
 
+	appmetrics "github.com/mustafa-oezdemir/shipping-service/internal/metrics"
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -87,6 +90,7 @@ func (dispatcher *Dispatcher) DeliverDue(ctx context.Context) error {
 			return err
 		}
 	}
+	appmetrics.RefreshOutbox(ctx, dispatcher.database)
 	return nil
 }
 
@@ -125,6 +129,7 @@ func (dispatcher *Dispatcher) claimDueEvents(ctx context.Context, limit int) ([]
 }
 
 func (dispatcher *Dispatcher) deliverOne(ctx context.Context, event models.OutboxEvent) error {
+	appmetrics.Callbacks.Inc()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, dispatcher.callbackURL, bytes.NewBufferString(event.Payload))
 	if err != nil {
 		return dispatcher.markRetry(ctx, event, fmt.Errorf("build callback request: %w", err), false)
@@ -138,6 +143,7 @@ func (dispatcher *Dispatcher) deliverOne(ctx context.Context, event models.Outbo
 	}
 	response, err := dispatcher.client.Do(request)
 	if err != nil {
+		appmetrics.CallbackFailures.Inc()
 		return dispatcher.markRetry(ctx, event, err, isTemporaryError(err))
 	}
 	defer response.Body.Close()
@@ -146,6 +152,7 @@ func (dispatcher *Dispatcher) deliverOne(ctx context.Context, event models.Outbo
 		return dispatcher.markDelivered(ctx, event)
 	}
 	permanent := response.StatusCode == http.StatusBadRequest || response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusUnprocessableEntity
+	appmetrics.CallbackFailures.Inc()
 	return dispatcher.markRetry(ctx, event, fmt.Errorf("callback returned %d", response.StatusCode), !permanent)
 }
 
@@ -177,6 +184,9 @@ func backoffDelay(base time.Duration, attempts int) time.Duration {
 		if delay >= 30*time.Minute {
 			return 30 * time.Minute
 		}
+	}
+	if jitter, err := rand.Int(rand.Reader, big.NewInt(int64(delay/4)+1)); err == nil {
+		delay += time.Duration(jitter.Int64())
 	}
 	return delay
 }

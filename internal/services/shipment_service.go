@@ -128,7 +128,7 @@ func (service *ShipmentService) Create(ctx context.Context, input CreateShipment
 		if err != nil {
 			return err
 		}
-		trackingNumber, err := generateNumber("NS-DE")
+		trackingNumber, err := generateNumber("PHE-DE")
 		if err != nil {
 			return err
 		}
@@ -244,7 +244,7 @@ func (service *ShipmentService) CreateReturn(ctx context.Context, input CreateRe
 			IdempotencyKey:     strings.TrimSpace(idempotencyKey),
 			OriginalShipmentID: &original.ID,
 			IsReturn:           true,
-			Status:             models.StatusReturnRequested,
+			Status:             models.StatusReturnAuthorized,
 			Carrier:            original.Carrier,
 			ServiceLevel:       original.ServiceLevel,
 			Sender:             normalizeAddress(input.CustomerAddress),
@@ -279,9 +279,9 @@ func (service *ShipmentService) CreateReturn(ctx context.Context, input CreateRe
 			RequestID:         requestID,
 			ActorType:         sourceService,
 			ActorID:           strings.TrimSpace(input.CustomerID),
-			Status:            models.StatusReturnRequested,
-			EventType:         "return_requested",
-			Title:             "Return requested",
+			Status:            models.StatusReturnAuthorized,
+			EventType:         "return_authorized",
+			Title:             "Return authorized by commerce",
 			IdempotencyKey:    idempotencyKey + "/created",
 			OccurredAt:        time.Now().UTC(),
 			CreateOutboxEvent: true,
@@ -410,6 +410,27 @@ func (service *ShipmentService) Transition(ctx context.Context, shipmentPublicID
 		return nil, false, err
 	}
 	return &shipment, replayed, nil
+}
+
+func (service *ShipmentService) Cancel(ctx context.Context, shipmentPublicID, idempotencyKey, requestID, sourceService string) (*models.Shipment, bool, error) {
+	var shipment models.Shipment
+	if err := service.database.WithContext(ctx).Where("public_id = ? AND is_return = ?", strings.TrimSpace(shipmentPublicID), false).First(&shipment).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, false, ErrShipmentNotFound
+		}
+		return nil, false, err
+	}
+	if shipment.Status == models.StatusCancelled || shipment.Status == models.StatusReturnToSenderRequested {
+		return &shipment, true, nil
+	}
+	if shipment.Status == models.StatusDelivered || shipment.Status == models.StatusReturnToSenderPrepared || shipment.Status == models.StatusReturnToSenderInTransit || shipment.Status == models.StatusReturnToSenderReceived {
+		return nil, false, ErrInvalidTransition
+	}
+	next := models.StatusReturnToSenderRequested
+	if shipment.Status == models.StatusHandedOver {
+		next = models.StatusCancelled
+	}
+	return service.Transition(ctx, shipmentPublicID, shipment.Status, next, models.RoleAdmin, sourceService, idempotencyKey, requestID, sourceService)
 }
 
 func (service *ShipmentService) UpdateStops(ctx context.Context, shipmentPublicID string, stops int, actorRole models.Role, actorID, idempotencyKey, requestID, sourceService string) (*models.Shipment, bool, error) {

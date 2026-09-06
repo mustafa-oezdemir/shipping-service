@@ -152,13 +152,15 @@ Each accepted status/ETA/stops/event mutation writes:
 
 ```bash
 cp .env.example .env
+docker network inspect pehlione-backend >/dev/null 2>&1 || docker network create pehlione-backend
 docker compose config
 docker compose up --build
 ```
 
 - Host access: `http://localhost:8090`
 - Container-to-container access: use Docker DNS such as `http://shipping-app:8090`
-- Callback URLs should target the e-commerce container/service, not `localhost`, when both run in Docker
+- The separate development stacks share only the external `pehlione-backend` network.
+- Callback URLs target `http://ecommerce-app:8080`; they never use `localhost` inside a container.
 
 ## URL reference
 

@@ -61,7 +61,17 @@ services:
       - "${SHIPPING_HOST_PORT:-8090}:8090"
     volumes:
       - shipping_profile_images:/app/data/profile-images
+    networks:
+      default:
+      pehlione-backend:
+        aliases:
+          - shipping-app
 
 volumes:
   shipping_mysql:
   shipping_profile_images:
+
+networks:
+  pehlione-backend:
+    external: true
+    name: pehlione-backend
