@@ -11,6 +11,7 @@ import (
 type createShipmentRequest struct {
 	OrderID        string         `json:"order_id" binding:"required,max=64"`
 	CustomerID     string         `json:"customer_id" binding:"required,max=64"`
+	HandoverCode   string         `json:"handover_code" binding:"required,max=64"`
 	Recipient      addressRequest `json:"recipient" binding:"required"`
 	Items          []itemRequest  `json:"items" binding:"required,min=1"`
 	Carrier        string         `json:"carrier" binding:"required,max=80"`
@@ -80,6 +81,7 @@ type createEventRequest struct {
 
 type createdShipmentResponse struct {
 	ShipmentID        string                     `json:"shipment_id"`
+	HandoverCode      string                     `json:"handover_code"`
 	TrackingNumber    string                     `json:"tracking_number"`
 	ShipmentType      string                     `json:"shipment_type"`
 	Status            string                     `json:"status"`
@@ -91,6 +93,7 @@ type createdShipmentResponse struct {
 type shipmentResponse struct {
 	ShipmentID        string                     `json:"shipment_id"`
 	OrderID           string                     `json:"order_id"`
+	HandoverCode      string                     `json:"handover_code"`
 	TrackingNumber    string                     `json:"tracking_number"`
 	ShipmentType      string                     `json:"shipment_type"`
 	Status            string                     `json:"status"`
@@ -120,7 +123,7 @@ func (request createShipmentRequest) toServiceInput() services.CreateShipmentInp
 	for _, item := range request.Items {
 		items = append(items, services.ItemInput{ProductID: item.ProductID, Name: item.Name, SKU: item.SKU, Quantity: item.Quantity})
 	}
-	return services.CreateShipmentInput{OrderID: request.OrderID, CustomerID: request.CustomerID, Recipient: request.Recipient.toModel(), Items: items, Carrier: request.Carrier, ServiceLevel: request.ServiceLevel, EstimatedFrom: request.EstimatedFrom, EstimatedUntil: request.EstimatedUntil}
+	return services.CreateShipmentInput{OrderID: request.OrderID, CustomerID: request.CustomerID, HandoverCode: request.HandoverCode, Recipient: request.Recipient.toModel(), Items: items, Carrier: request.Carrier, ServiceLevel: request.ServiceLevel, EstimatedFrom: request.EstimatedFrom, EstimatedUntil: request.EstimatedUntil}
 }
 
 func (request createReturnRequest) toServiceInput() services.CreateReturnInput {
@@ -140,11 +143,18 @@ func (request createEventRequest) toServiceInput() services.ShipmentEventInput {
 }
 
 func newCreatedShipmentResponse(shipment *models.Shipment, replay bool) createdShipmentResponse {
-	return createdShipmentResponse{ShipmentID: shipment.PublicID, TrackingNumber: shipment.TrackingNumber, ShipmentType: shipmentTypeLabel(shipment.IsReturn), Status: string(shipment.Status), StatusLabel: statusLabel(shipment.Status), EstimatedDelivery: newEstimatedDeliveryResponse(shipment.EstimatedFrom, shipment.EstimatedUntil), IdempotentReplay: replay}
+	return createdShipmentResponse{ShipmentID: shipment.PublicID, HandoverCode: shipmentHandoverCode(shipment), TrackingNumber: shipment.TrackingNumber, ShipmentType: shipmentTypeLabel(shipment.IsReturn), Status: string(shipment.Status), StatusLabel: statusLabel(shipment.Status), EstimatedDelivery: newEstimatedDeliveryResponse(shipment.EstimatedFrom, shipment.EstimatedUntil), IdempotentReplay: replay}
 }
 
 func newShipmentResponse(shipment *models.Shipment) shipmentResponse {
-	return shipmentResponse{ShipmentID: shipment.PublicID, OrderID: shipment.ExternalOrderID, TrackingNumber: shipment.TrackingNumber, ShipmentType: shipmentTypeLabel(shipment.IsReturn), Status: string(shipment.Status), StatusLabel: statusLabel(shipment.Status), RemainingStops: shipment.RemainingStops, EstimatedDelivery: newEstimatedDeliveryResponse(shipment.EstimatedFrom, shipment.EstimatedUntil)}
+	return shipmentResponse{ShipmentID: shipment.PublicID, OrderID: shipment.ExternalOrderID, HandoverCode: shipmentHandoverCode(shipment), TrackingNumber: shipment.TrackingNumber, ShipmentType: shipmentTypeLabel(shipment.IsReturn), Status: string(shipment.Status), StatusLabel: statusLabel(shipment.Status), RemainingStops: shipment.RemainingStops, EstimatedDelivery: newEstimatedDeliveryResponse(shipment.EstimatedFrom, shipment.EstimatedUntil)}
+}
+
+func shipmentHandoverCode(shipment *models.Shipment) string {
+	if shipment.HandoverCode == nil {
+		return ""
+	}
+	return *shipment.HandoverCode
 }
 
 func newShipmentEventResponse(event *models.ShipmentEvent) shipmentEventResponse {

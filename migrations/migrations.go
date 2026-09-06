@@ -17,6 +17,14 @@ var orderedMigrations = []migration{
 	{version: "000001_initial", apply: applyInitialSchema},
 	{version: "000002_api_v1_contract", apply: applyAPIContractUpgrade},
 	{version: "000003_personnel_portal", apply: applyPersonnelPortal},
+	{version: "000004_handover_code", apply: applyHandoverCode},
+}
+
+func applyHandoverCode(transaction *gorm.DB) error {
+	if err := ensureColumn(transaction, &models.Shipment{}, "handover_code", "ALTER TABLE shipments ADD COLUMN handover_code VARCHAR(64) NULL AFTER shipment_number"); err != nil {
+		return err
+	}
+	return ensureIndex(transaction, &models.Shipment{}, "HandoverCode")
 }
 
 func applyPersonnelPortal(transaction *gorm.DB) error {

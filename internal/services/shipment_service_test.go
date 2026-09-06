@@ -50,7 +50,7 @@ func TestCreateShipmentIsIdempotent(t *testing.T) {
 	service := NewShipmentService(database, config.Warehouse{Name: "NordShop", Street: "Musterstrasse", HouseNumber: "10", PostalCode: "35039", City: "Marburg", CountryCode: "DE"})
 	from := time.Now().UTC().Add(2 * time.Hour)
 	until := from.Add(2 * time.Hour)
-	input := CreateShipmentInput{OrderID: "17", CustomerID: "5", Carrier: "DHL", ServiceLevel: "standard", EstimatedFrom: &from, EstimatedUntil: &until, Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", SKU: "ABC-123", Quantity: 1}}}
+	input := CreateShipmentInput{OrderID: "17", CustomerID: "5", HandoverCode: "PHE-HO-DE-20260906-7K4M9P", Carrier: "DHL", ServiceLevel: "standard", EstimatedFrom: &from, EstimatedUntil: &until, Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", SKU: "ABC-123", Quantity: 1}}}
 	first, created, err := service.Create(context.Background(), input, "idem-17", "ecommerce-gin", "req-17")
 	if err != nil {
 		t.Fatalf("create first shipment: %v", err)
@@ -87,7 +87,7 @@ func TestCreateShipmentIsIdempotent(t *testing.T) {
 func TestCreateShipmentRejectsInvalidGermanAddress(t *testing.T) {
 	database := testutil.NewTestDB(t)
 	service := NewShipmentService(database, config.Warehouse{Name: "NordShop", Street: "Musterstrasse", HouseNumber: "10", PostalCode: "35039", City: "Marburg", CountryCode: "DE"})
-	_, _, err := service.Create(context.Background(), CreateShipmentInput{OrderID: "17", CustomerID: "5", Carrier: "DHL", ServiceLevel: "standard", Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "3503", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-17", "ecommerce-gin", "req-17")
+	_, _, err := service.Create(context.Background(), CreateShipmentInput{OrderID: "17", CustomerID: "5", HandoverCode: "PHE-HO-DE-20260906-7K4M9P", Carrier: "DHL", ServiceLevel: "standard", Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "3503", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-17", "ecommerce-gin", "req-17")
 	if err == nil {
 		t.Fatal("expected invalid German address to be rejected")
 	}
@@ -96,7 +96,7 @@ func TestCreateShipmentRejectsInvalidGermanAddress(t *testing.T) {
 func TestCreateReturnUsesPublicShipmentIdentifier(t *testing.T) {
 	database := testutil.NewTestDB(t)
 	service := NewShipmentService(database, config.Warehouse{Name: "NordShop", Street: "Musterstrasse", HouseNumber: "10", PostalCode: "35039", City: "Marburg", CountryCode: "DE"})
-	shipment, _, err := service.Create(context.Background(), CreateShipmentInput{OrderID: "17", CustomerID: "5", Carrier: "DHL", ServiceLevel: "standard", Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-17", "ecommerce-gin", "req-17")
+	shipment, _, err := service.Create(context.Background(), CreateShipmentInput{OrderID: "17", CustomerID: "5", HandoverCode: "PHE-HO-DE-20260906-7K4M9P", Carrier: "DHL", ServiceLevel: "standard", Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-17", "ecommerce-gin", "req-17")
 	if err != nil {
 		t.Fatalf("create outbound shipment: %v", err)
 	}

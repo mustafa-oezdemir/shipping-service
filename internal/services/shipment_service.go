@@ -35,6 +35,7 @@ var germanPostalCodePattern = regexp.MustCompile(`^\d{5}$`)
 type CreateShipmentInput struct {
 	OrderID        string
 	CustomerID     string
+	HandoverCode   string
 	Recipient      models.AddressSnapshot
 	Items          []ItemInput
 	Carrier        string
@@ -131,9 +132,11 @@ func (service *ShipmentService) Create(ctx context.Context, input CreateShipment
 		if err != nil {
 			return err
 		}
+		handoverCode := strings.TrimSpace(input.HandoverCode)
 		shipment = models.Shipment{
 			PublicID:           generateIdentifier("shp"),
 			ShipmentNumber:     shipmentNumber,
+			HandoverCode:       &handoverCode,
 			TrackingNumber:     trackingNumber,
 			ExternalOrderID:    strings.TrimSpace(input.OrderID),
 			ExternalCustomerID: strings.TrimSpace(input.CustomerID),
@@ -626,6 +629,8 @@ func shipmentMatchesCreate(shipment models.Shipment, input CreateShipmentInput) 
 	return !shipment.IsReturn &&
 		shipment.ExternalOrderID == strings.TrimSpace(input.OrderID) &&
 		shipment.ExternalCustomerID == strings.TrimSpace(input.CustomerID) &&
+		shipment.HandoverCode != nil &&
+		*shipment.HandoverCode == strings.TrimSpace(input.HandoverCode) &&
 		shipment.Carrier == strings.TrimSpace(input.Carrier) &&
 		shipment.ServiceLevel == strings.TrimSpace(input.ServiceLevel) &&
 		shipment.Recipient == normalizeAddress(input.Recipient) &&
@@ -684,7 +689,7 @@ func (service *ShipmentService) getByTracking(ctx context.Context, trackingNumbe
 }
 
 func validateCreateInput(input CreateShipmentInput, key string) error {
-	if !validLength(input.OrderID, 64) || !validLength(input.CustomerID, 64) || !validLength(key, 128) || len(input.Items) == 0 || len(input.Items) > 500 {
+	if !validLength(input.OrderID, 64) || !validLength(input.CustomerID, 64) || !validLength(input.HandoverCode, 64) || !validLength(key, 128) || len(input.Items) == 0 || len(input.Items) > 500 {
 		return ErrInvalidShipment
 	}
 	if err := validateAddress(input.Recipient); err != nil {

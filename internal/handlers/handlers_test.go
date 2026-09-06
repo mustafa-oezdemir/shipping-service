@@ -90,7 +90,7 @@ func TestCreateShipmentRejectsOversizedAndUnknownJSON(t *testing.T) {
 func TestCreateShipmentReturnsVersionedJSONContract(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := newTestRouter(t)
-	body := map[string]any{"order_id": "17", "customer_id": "5", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
+	body := map[string]any{"order_id": "17", "customer_id": "5", "handover_code": "PHE-HO-DE-20260906-7K4M9P", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
 	payload, _ := json.Marshal(body)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/shipments", bytes.NewReader(payload))
 	request.Header.Set("Content-Type", "application/json")
@@ -125,7 +125,7 @@ func TestCreateShipmentReturnsVersionedJSONContract(t *testing.T) {
 func TestCreateShipmentIdempotentReplayReturnsSameShipment(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := newTestRouter(t)
-	body := map[string]any{"order_id": "17", "customer_id": "5", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
+	body := map[string]any{"order_id": "17", "customer_id": "5", "handover_code": "PHE-HO-DE-20260906-7K4M9P", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
 	payload, _ := json.Marshal(body)
 	first := httptest.NewRequest(http.MethodPost, "/api/v1/shipments", bytes.NewReader(payload))
 	first.Header.Set("Content-Type", "application/json")
@@ -166,8 +166,8 @@ func TestCreateShipmentIdempotentReplayReturnsSameShipment(t *testing.T) {
 func TestCreateShipmentRejectsIdempotencyKeyReuseForDifferentOrder(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := newTestRouter(t)
-	firstBody := map[string]any{"order_id": "17", "customer_id": "5", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
-	secondBody := map[string]any{"order_id": "18", "customer_id": "5", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
+	firstBody := map[string]any{"order_id": "17", "customer_id": "5", "handover_code": "PHE-HO-DE-20260906-7K4M9P", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
+	secondBody := map[string]any{"order_id": "18", "customer_id": "5", "handover_code": "PHE-HO-DE-20260906-A82KLM", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
 
 	requestShipment := func(body map[string]any) *httptest.ResponseRecorder {
 		payload, _ := json.Marshal(body)
@@ -232,7 +232,7 @@ func newTestRouter(t *testing.T) *gin.Engine {
 
 func createShipment(t *testing.T, router *gin.Engine) {
 	t.Helper()
-	body := map[string]any{"order_id": "17", "customer_id": "5", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
+	body := map[string]any{"order_id": "17", "customer_id": "5", "handover_code": "PHE-HO-DE-20260906-7K4M9P", "carrier": "DHL", "service_level": "standard", "recipient": map[string]any{"first_name": "Mustafa", "last_name": "Oezdemir", "street": "Musterstrasse", "house_number": "25", "postal_code": "35037", "city": "Marburg", "country_code": "DE"}, "items": []map[string]any{{"product_id": "12", "name": "Product Name", "quantity": 1}}}
 	payload, _ := json.Marshal(body)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/shipments", bytes.NewReader(payload))
 	request.Header.Set("Content-Type", "application/json")

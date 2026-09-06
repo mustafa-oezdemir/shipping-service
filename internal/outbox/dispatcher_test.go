@@ -18,7 +18,7 @@ import (
 func TestDispatcherRetriesAndMarksDelivered(t *testing.T) {
 	database := testutil.NewTestDB(t)
 	service := services.NewShipmentService(database, config.Warehouse{Name: "NordShop", Street: "Musterstrasse", HouseNumber: "10", PostalCode: "35039", City: "Marburg", CountryCode: "DE"})
-	shipment, _, err := service.Create(context.Background(), services.CreateShipmentInput{OrderID: "17", CustomerID: "5", Carrier: "DHL", ServiceLevel: "standard", Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []services.ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-17", "ecommerce-gin", "req-17")
+	shipment, _, err := service.Create(context.Background(), services.CreateShipmentInput{OrderID: "17", CustomerID: "5", HandoverCode: "PHE-HO-DE-20260906-7K4M9P", Carrier: "DHL", ServiceLevel: "standard", Recipient: models.AddressSnapshot{FirstName: "Mustafa", LastName: "Oezdemir", Street: "Musterstrasse", HouseNumber: "25", PostalCode: "35037", City: "Marburg", CountryCode: "DE"}, Items: []services.ItemInput{{ProductID: "12", Name: "Product Name", Quantity: 1}}}, "idem-17", "ecommerce-gin", "req-17")
 	if err != nil {
 		t.Fatalf("create shipment: %v", err)
 	}

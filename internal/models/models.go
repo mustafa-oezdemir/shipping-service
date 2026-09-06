@@ -80,6 +80,7 @@ type Shipment struct {
 	gorm.Model
 	PublicID           string          `gorm:"size:64;uniqueIndex;not null"`
 	ShipmentNumber     string          `gorm:"size:64;uniqueIndex;not null"`
+	HandoverCode       *string         `gorm:"size:64;uniqueIndex"`
 	TrackingNumber     string          `gorm:"size:64;uniqueIndex;not null"`
 	ExternalOrderID    string          `gorm:"size:64;index;not null"`
 	ExternalCustomerID string          `gorm:"size:64;index;not null"`
