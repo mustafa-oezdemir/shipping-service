@@ -3,10 +3,12 @@ services:
     image: mysql:8.4
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-shipping}
-      MYSQL_USER: ${MYSQL_USER:-shipping}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?set MYSQL_DATABASE in .env}
+      MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER in .env}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+    ports:
+      - "${SHIPPING_DB_HOST_PORT:-3306}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 5s
@@ -27,7 +29,12 @@ services:
       APP_URL: ${APP_URL:-http://localhost:8090}
       GIN_MODE: ${GIN_MODE:-debug}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
-      DATABASE_DSN: ${DATABASE_DSN_DOCKER:-shipping:${MYSQL_PASSWORD}@tcp(shipping-db:3306)/shipping?charset=utf8mb4&parseTime=True&loc=UTC}
+      DATABASE_DSN_DOCKER: ${DATABASE_DSN_DOCKER:-}
+      MYSQL_HOST: shipping-db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?set MYSQL_DATABASE in .env}
+      MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
       DATABASE_CONNECT_TIMEOUT: ${DATABASE_CONNECT_TIMEOUT:-30s}
       ECOMMERCE_TO_SHIPPING_TOKEN: ${ECOMMERCE_TO_SHIPPING_TOKEN:-${ECOMMERCE_SERVICE_TOKEN:-}}
       ECOMMERCE_SERVICE_TOKEN: ${ECOMMERCE_SERVICE_TOKEN:-}

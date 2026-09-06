@@ -3,11 +3,14 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-sql-driver/mysql"
 )
 
 type Config struct {
@@ -52,6 +55,10 @@ type Warehouse struct {
 }
 
 func Load() (Config, error) {
+	databaseDSN, err := resolveDatabaseDSN()
+	if err != nil {
+		return Config{}, err
+	}
 	appEnv := strings.ToLower(environment("APP_ENV", "development"))
 	appURL := firstNonEmptyEnv("APP_URL", "PUBLIC_BASE_URL")
 	if appURL == "" {
@@ -88,7 +95,7 @@ func Load() (Config, error) {
 		AppURL:                     validatedAppURL,
 		GinMode:                    strings.ToLower(environment("GIN_MODE", map[bool]string{true: "release", false: "debug"}[appEnv == "production"])),
 		TrustedProxies:             csvEnvironment("TRUSTED_PROXIES"),
-		DatabaseDSN:                strings.TrimSpace(os.Getenv("DATABASE_DSN")),
+		DatabaseDSN:                databaseDSN,
 		DatabaseConnectTimeout:     durationEnvironment("DATABASE_CONNECT_TIMEOUT", 30*time.Second),
 		CurrentServiceToken:        firstNonEmptyEnv("ECOMMERCE_TO_SHIPPING_TOKEN", "ECOMMERCE_SERVICE_TOKEN"),
 		PreviousServiceToken:       strings.TrimSpace(os.Getenv("ECOMMERCE_TO_SHIPPING_PREVIOUS_TOKEN")),
@@ -132,8 +139,8 @@ func Load() (Config, error) {
 	if config.AppEnv == "production" && config.GinMode != "release" {
 		return Config{}, errors.New("GIN_MODE must be release in production")
 	}
-	if config.DatabaseDSN == "" || len(config.CurrentServiceToken) < 32 || len(config.InternalQRSecret) < 32 {
-		return Config{}, errors.New("DATABASE_DSN, ECOMMERCE_TO_SHIPPING_TOKEN (or ECOMMERCE_SERVICE_TOKEN), and a 32-character INTERNAL_QR_SECRET are required")
+	if len(config.CurrentServiceToken) < 32 || len(config.InternalQRSecret) < 32 {
+		return Config{}, errors.New("ECOMMERCE_TO_SHIPPING_TOKEN (or ECOMMERCE_SERVICE_TOKEN) and a 32-character INTERNAL_QR_SECRET are required")
 	}
 	if config.PreviousServiceToken != "" && len(config.PreviousServiceToken) < 32 {
 		return Config{}, errors.New("ECOMMERCE_TO_SHIPPING_PREVIOUS_TOKEN must be at least 32 characters when set")
@@ -160,6 +167,44 @@ func Load() (Config, error) {
 		return Config{}, errors.New("INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD must be set together")
 	}
 	return config, nil
+}
+
+func resolveDatabaseDSN() (string, error) {
+	if dsn := strings.TrimSpace(os.Getenv("DATABASE_DSN_DOCKER")); dsn != "" {
+		return dsn, nil
+	}
+	if dsn := strings.TrimSpace(os.Getenv("DATABASE_DSN")); dsn != "" {
+		return dsn, nil
+	}
+
+	user := strings.TrimSpace(os.Getenv("MYSQL_USER"))
+	password := os.Getenv("MYSQL_PASSWORD")
+	databaseName := strings.TrimSpace(os.Getenv("MYSQL_DATABASE"))
+	if user == "" || strings.TrimSpace(password) == "" || databaseName == "" {
+		return "", errors.New("database configuration requires MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE when DATABASE_DSN_DOCKER and DATABASE_DSN are unset")
+	}
+
+	host := environment("MYSQL_HOST", "127.0.0.1")
+	port := firstNonEmptyEnv("MYSQL_PORT", "SHIPPING_DB_HOST_PORT")
+	if port == "" {
+		port = "3306"
+	}
+	parsedPort, err := strconv.Atoi(port)
+	if err != nil || parsedPort < 1 || parsedPort > 65535 {
+		return "", errors.New("MYSQL_PORT (or SHIPPING_DB_HOST_PORT) must be a valid TCP port")
+	}
+
+	mysqlConfig := mysql.Config{
+		User:      user,
+		Passwd:    password,
+		Net:       "tcp",
+		Addr:      net.JoinHostPort(host, port),
+		DBName:    databaseName,
+		ParseTime: true,
+		Loc:       time.UTC,
+		Params:    map[string]string{"charset": "utf8mb4"},
+	}
+	return mysqlConfig.FormatDSN(), nil
 }
 
 func validatePublicURL(name, raw string, requireHTTPS bool) (string, string, error) {

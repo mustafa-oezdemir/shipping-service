@@ -123,7 +123,11 @@ Each accepted status/ETA/stops/event mutation writes:
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_DSN` | Shipping database DSN |
+| `DATABASE_DSN_DOCKER` | Optional Docker-specific DSN; highest precedence |
+| `DATABASE_DSN` | Optional general DSN; used when the Docker-specific DSN is empty |
+| `MYSQL_HOST` / `MYSQL_PORT` | Host and port used when config builds the DSN |
+| `SHIPPING_DB_HOST_PORT` | Host-published MySQL port and local fallback when `MYSQL_PORT` is empty |
+| `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | Required values when neither explicit DSN is set |
 | `APP_ENV` | Runtime environment (`development`, `test`, or `production`) |
 | `APP_URL` | Canonical public tracking/QR origin; required and HTTPS-only in production |
 | `GIN_MODE` | Gin mode; must be `release` in production |
@@ -149,6 +153,16 @@ Each accepted status/ETA/stops/event mutation writes:
 | `WAREHOUSE_*` | Sender/depot address snapshot configuration |
 
 ## Docker / local development
+
+Database DSN resolution is deterministic:
+
+1. `DATABASE_DSN_DOCKER`
+2. `DATABASE_DSN`
+3. a DSN built from `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_HOST`, and `MYSQL_PORT` (or `SHIPPING_DB_HOST_PORT`)
+
+Compose deliberately gives `shipping-app` the internal address `shipping-db:3306`. `SHIPPING_DB_HOST_PORT` only publishes MySQL to the host, for example as `127.0.0.1:3308`.
+
+MySQL initialization variables only take effect when the data volume is first created. If an existing development volume was initialized under another database/user name, migrate it or explicitly recreate that volume after backing up any data you need; Compose does not delete it automatically.
 
 ```bash
 cp .env.example .env
