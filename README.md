@@ -143,7 +143,7 @@ Production values are split by purpose:
 - `ECOMMERCE_PUBLIC_URL=https://pehlione-ecommerce.com` identifies the browser-facing store.
 - `ECOMMERCE_API_URL=http://ecommerce-app:8080` is private Docker traffic and derives the versioned callback endpoint.
 
-Copy `.env.production.example` only as a reference; the combined stack reads its secrets from `ecommerce-gin/.env.production`. DNS for both domains must point to the deployment host before Caddy can obtain certificates. See the E-Commerce README for deployment and `curl` verification commands.
+Use the sibling `ecommerce-gin/scripts/New-ProductionEnv.ps1` generator to create ignored `.env.production` files for both repositories with matching, cryptographically secure service tokens. The combined stack reads its secrets from `ecommerce-gin/.env.production`; replace its remaining `CHANGE_ME` ACME/SMTP values before deployment. DNS for both domains must point to the deployment host before Caddy can obtain certificates. See the E-Commerce README for deployment and `curl` verification commands.
 
 ## Verification commands
 
