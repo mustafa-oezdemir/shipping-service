@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,10 @@ type Handler struct {
 
 func New(service *services.ShipmentService, database *gorm.DB, publicBaseURL string) *Handler {
 	return &Handler{service: service, database: database, publicBaseURL: strings.TrimRight(publicBaseURL, "/")}
+}
+
+func (handler *Handler) Index(context *gin.Context) {
+	context.JSON(http.StatusOK, gin.H{"service": "shipping-service", "status": "ok"})
 }
 
 func (handler *Handler) Health(context *gin.Context) {
@@ -225,7 +230,7 @@ func (handler *Handler) InternalShipment(context *gin.Context) {
 }
 
 func (handler *Handler) TrackingQR(context *gin.Context) {
-	trackingURL := handler.publicBaseURL + "/track/" + context.Param("trackingNumber")
+	trackingURL := handler.trackingURL(context.Param("trackingNumber"))
 	png, err := qrcode.Encode(trackingURL, qrcode.Medium, 256)
 	if err != nil {
 		context.AbortWithStatus(http.StatusInternalServerError)
@@ -245,7 +250,11 @@ func (handler *Handler) Label(context *gin.Context) {
 		handler.respondError(context, err)
 		return
 	}
-	context.HTML(http.StatusOK, "label.tmpl", gin.H{"Shipment": shipment, "TrackingURL": handler.publicBaseURL + "/track/" + shipment.TrackingNumber})
+	context.HTML(http.StatusOK, "label.tmpl", gin.H{"Shipment": shipment, "TrackingURL": handler.trackingURL(shipment.TrackingNumber)})
+}
+
+func (handler *Handler) trackingURL(trackingNumber string) string {
+	return handler.publicBaseURL + "/track/" + url.PathEscape(trackingNumber)
 }
 
 func (handler *Handler) Dashboard(context *gin.Context) {

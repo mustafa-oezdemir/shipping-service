@@ -101,14 +101,20 @@ Each accepted status/ETA/stops/event mutation writes:
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_DSN` | Shipping database DSN |
+| `APP_ENV` | Runtime environment (`development`, `test`, or `production`) |
+| `APP_URL` | Canonical public tracking/QR origin; required and HTTPS-only in production |
+| `GIN_MODE` | Gin mode; must be `release` in production |
+| `TRUSTED_PROXIES` | Comma-separated proxy IPs/CIDRs |
 | `SHIPPING_HOST_PORT` | Docker host port for Shipping (default `8090`) |
 | `DATABASE_CONNECT_TIMEOUT` | Bounded startup retry window for the Shipping database |
 | `ECOMMERCE_TO_SHIPPING_TOKEN` | Current inbound internal API token |
 | `ECOMMERCE_TO_SHIPPING_PREVIOUS_TOKEN` | Optional previous inbound token during rotation |
 | `ECOMMERCE_CALLBACK_URL` | E-commerce callback endpoint for shipping events |
+| `ECOMMERCE_API_URL` | Internal E-Commerce origin; derives the callback path when an exact callback URL is omitted |
+| `ECOMMERCE_PUBLIC_URL` | Browser-reachable E-Commerce origin |
 | `SHIPPING_TO_ECOMMERCE_TOKEN` | Outbound callback bearer token |
 | `INTERNAL_QR_SECRET` | Reserved secret for future signed internal QR flows |
-| `PUBLIC_BASE_URL` | Public base URL encoded in QR codes |
+| `PUBLIC_BASE_URL` | Deprecated compatibility alias for `APP_URL` |
 | `OUTBOX_POLL_INTERVAL` | Dispatcher poll interval |
 | `OUTBOX_RETRY_BASE_DELAY` | Base retry backoff |
 | `OUTBOX_PROCESSING_STALE_AFTER` | Recover stuck processing outbox rows after this age |
@@ -126,6 +132,18 @@ docker compose up --build
 - Host access: `http://localhost:8090`
 - Container-to-container access: use Docker DNS such as `http://shipping-app:8090`
 - Callback URLs should target the e-commerce container/service, not `localhost`, when both run in Docker
+
+## Production deployment
+
+The sibling `ecommerce-gin/docker-compose.production.yml` is the authoritative two-service production stack. It builds this repository, publishes Shipping at `https://pehlione-shipping.com` through Caddy, and does not expose port 8090 or the Shipping database on the host.
+
+Production values are split by purpose:
+
+- `APP_URL=https://pehlione-shipping.com` generates tracking links and QR contents.
+- `ECOMMERCE_PUBLIC_URL=https://pehlione-ecommerce.com` identifies the browser-facing store.
+- `ECOMMERCE_API_URL=http://ecommerce-app:8080` is private Docker traffic and derives the versioned callback endpoint.
+
+Copy `.env.production.example` only as a reference; the combined stack reads its secrets from `ecommerce-gin/.env.production`. DNS for both domains must point to the deployment host before Caddy can obtain certificates. See the E-Commerce README for deployment and `curl` verification commands.
 
 ## Verification commands
 

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -10,13 +11,19 @@ import (
 )
 
 type Config struct {
+	AppEnv                     string
 	AppPort                    string
+	AppURL                     string
+	GinMode                    string
+	TrustedProxies             []string
 	DatabaseDSN                string
 	DatabaseConnectTimeout     time.Duration
 	CurrentServiceToken        string
 	PreviousServiceToken       string
 	InternalQRSecret           string
 	PublicBaseURL              string
+	EcommerceAPIURL            string
+	EcommercePublicURL         string
 	Warehouse                  Warehouse
 	RequestTimeout             time.Duration
 	EcommerceCallbackURL       string
@@ -38,16 +45,52 @@ type Warehouse struct {
 }
 
 func Load() (Config, error) {
+	appEnv := strings.ToLower(environment("APP_ENV", "development"))
+	appURL := firstNonEmptyEnv("APP_URL", "PUBLIC_BASE_URL")
+	if appURL == "" {
+		appURL = "http://localhost:8090"
+	}
+	validatedAppURL, _, err := validatePublicURL("APP_URL", appURL, appEnv == "production")
+	if err != nil {
+		return Config{}, err
+	}
+	ecommerceAPIURL := strings.TrimRight(strings.TrimSpace(os.Getenv("ECOMMERCE_API_URL")), "/")
+	ecommercePublicURL := strings.TrimRight(strings.TrimSpace(os.Getenv("ECOMMERCE_PUBLIC_URL")), "/")
+	if ecommerceAPIURL != "" {
+		if err := validateHTTPURL("ECOMMERCE_API_URL", ecommerceAPIURL, false); err != nil {
+			return Config{}, err
+		}
+	}
+	if ecommercePublicURL != "" {
+		if _, _, err := validatePublicURL("ECOMMERCE_PUBLIC_URL", ecommercePublicURL, appEnv == "production"); err != nil {
+			return Config{}, err
+		}
+	}
+	callbackURL := strings.TrimSpace(os.Getenv("ECOMMERCE_CALLBACK_URL"))
+	if callbackURL == "" && ecommerceAPIURL != "" {
+		callbackURL = ecommerceAPIURL + "/api/v1/internal/shipping/events"
+	}
+	if callbackURL != "" {
+		if err := validateHTTPURL("ECOMMERCE_CALLBACK_URL", callbackURL, true); err != nil {
+			return Config{}, err
+		}
+	}
 	config := Config{
+		AppEnv:                     appEnv,
 		AppPort:                    environment("APP_PORT", "8090"),
+		AppURL:                     validatedAppURL,
+		GinMode:                    strings.ToLower(environment("GIN_MODE", map[bool]string{true: "release", false: "debug"}[appEnv == "production"])),
+		TrustedProxies:             csvEnvironment("TRUSTED_PROXIES"),
 		DatabaseDSN:                strings.TrimSpace(os.Getenv("DATABASE_DSN")),
 		DatabaseConnectTimeout:     durationEnvironment("DATABASE_CONNECT_TIMEOUT", 30*time.Second),
 		CurrentServiceToken:        firstNonEmptyEnv("ECOMMERCE_TO_SHIPPING_TOKEN", "ECOMMERCE_SERVICE_TOKEN"),
 		PreviousServiceToken:       strings.TrimSpace(os.Getenv("ECOMMERCE_TO_SHIPPING_PREVIOUS_TOKEN")),
 		InternalQRSecret:           strings.TrimSpace(os.Getenv("INTERNAL_QR_SECRET")),
-		PublicBaseURL:              environment("PUBLIC_BASE_URL", "http://localhost:8090"),
+		PublicBaseURL:              validatedAppURL,
+		EcommerceAPIURL:            ecommerceAPIURL,
+		EcommercePublicURL:         ecommercePublicURL,
 		RequestTimeout:             durationEnvironment("REQUEST_TIMEOUT", 10*time.Second),
-		EcommerceCallbackURL:       strings.TrimSpace(os.Getenv("ECOMMERCE_CALLBACK_URL")),
+		EcommerceCallbackURL:       callbackURL,
 		EcommerceCallbackToken:     firstNonEmptyEnv("SHIPPING_TO_ECOMMERCE_TOKEN", "ECOMMERCE_CALLBACK_TOKEN"),
 		OutboxPollInterval:         durationEnvironment("OUTBOX_POLL_INTERVAL", 5*time.Second),
 		OutboxRetryBaseDelay:       durationEnvironment("OUTBOX_RETRY_BASE_DELAY", 30*time.Second),
@@ -62,6 +105,18 @@ func Load() (Config, error) {
 			City:        strings.TrimSpace(os.Getenv("WAREHOUSE_CITY")),
 			CountryCode: environment("WAREHOUSE_COUNTRY", "DE"),
 		},
+	}
+	if config.AppEnv != "development" && config.AppEnv != "test" && config.AppEnv != "production" {
+		return Config{}, errors.New("APP_ENV must be one of: development, test, production")
+	}
+	if config.AppEnv == "production" && strings.TrimSpace(os.Getenv("APP_URL")) == "" {
+		return Config{}, errors.New("APP_URL is required in production")
+	}
+	if config.GinMode != "debug" && config.GinMode != "release" && config.GinMode != "test" {
+		return Config{}, errors.New("GIN_MODE must be debug, release, or test")
+	}
+	if config.AppEnv == "production" && config.GinMode != "release" {
+		return Config{}, errors.New("GIN_MODE must be release in production")
 	}
 	if config.DatabaseDSN == "" || len(config.CurrentServiceToken) < 32 || len(config.InternalQRSecret) < 32 {
 		return Config{}, errors.New("DATABASE_DSN, ECOMMERCE_TO_SHIPPING_TOKEN (or ECOMMERCE_SERVICE_TOKEN), and a 32-character INTERNAL_QR_SECRET are required")
@@ -82,6 +137,47 @@ func Load() (Config, error) {
 		return Config{}, errors.New("OUTBOX_MAX_ATTEMPTS must be greater than zero")
 	}
 	return config, nil
+}
+
+func validatePublicURL(name, raw string, requireHTTPS bool) (string, string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", "", fmt.Errorf("%s must be an absolute http(s) origin without credentials, query, or fragment", name)
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", "", fmt.Errorf("%s must not contain a path", name)
+	}
+	if requireHTTPS && parsed.Scheme != "https" {
+		return "", "", fmt.Errorf("%s must use https in production", name)
+	}
+	parsed.Path = ""
+	return strings.TrimRight(parsed.String(), "/"), parsed.Host, nil
+}
+
+func validateHTTPURL(name, raw string, allowPath bool) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("%s must be an absolute http(s) URL without credentials, query, or fragment", name)
+	}
+	if !allowPath && parsed.Path != "" && parsed.Path != "/" {
+		return fmt.Errorf("%s must not contain a path", name)
+	}
+	return nil
+}
+
+func csvEnvironment(key string) []string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil
+	}
+	items := strings.Split(value, ",")
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if item = strings.TrimSpace(item); item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
 }
 
 func (config Config) ServiceTokens() []string {

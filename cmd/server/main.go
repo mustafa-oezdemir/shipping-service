@@ -25,6 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	gin.SetMode(appConfig.GinMode)
 	shippingDatabase, err := database.Open(appConfig.DatabaseDSN, appConfig.DatabaseConnectTimeout)
 	if err != nil {
 		log.Fatal(err)
@@ -40,10 +41,14 @@ func main() {
 	dispatcher := outbox.NewDispatcher(shippingDatabase, outbox.Config{CallbackURL: appConfig.EcommerceCallbackURL, CallbackToken: appConfig.EcommerceCallbackToken, PollInterval: appConfig.OutboxPollInterval, RetryBaseDelay: appConfig.OutboxRetryBaseDelay, ProcessingStaleAfter: appConfig.OutboxProcessingStaleAfter, MaxAttempts: appConfig.OutboxMaxAttempts, RequestTimeout: appConfig.RequestTimeout, ServiceName: "shipping-service"})
 
 	router := gin.New()
-	router.Use(middleware.RequestMetadata("shipping-service"), gin.Logger(), gin.Recovery())
+	if err := router.SetTrustedProxies(appConfig.TrustedProxies); err != nil {
+		log.Fatal(err)
+	}
+	router.Use(middleware.RequestMetadata("shipping-service"), middleware.SecurityHeaders(appConfig.AppEnv == "production"), gin.Logger(), gin.Recovery())
 	router.MaxMultipartMemory = 1 << 20
 	router.SetHTMLTemplate(templates)
 	router.Static("/static", "./web/static")
+	router.GET("/", handler.Index)
 	router.GET("/health", handler.Health)
 	router.GET("/ready", handler.Ready)
 	router.GET("/track/:trackingNumber", handler.PublicTracking)
@@ -61,6 +66,7 @@ func main() {
 	operations := router.Group("")
 	operations.Use(middleware.RequireServiceToken(appConfig.ServiceTokens()...), middleware.RequireRole(models.RoleShippingAdmin, models.RoleWarehouseEmployee, models.RoleDeliveryEmployee, models.RoleSupport), middleware.NoStore())
 	operations.GET("/dashboard", handler.Dashboard)
+	operations.GET("/shipments", handler.Dashboard)
 	operations.GET("/shipments/:id", handler.InternalShipment)
 	operations.GET("/shipments/:id/label", handler.Label)
 	operations.PATCH("/api/v1/shipments/:id/status", middleware.RequireIdempotencyKey(), handler.TransitionShipment)
