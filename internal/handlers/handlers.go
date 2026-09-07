@@ -325,8 +325,7 @@ func (handler *Handler) TrackingQR(context *gin.Context) {
 		handler.respondError(context, err)
 		return
 	}
-	scanURL := handler.publicBaseURL + "/scan/shipment/" + url.PathEscape(shipment.PublicID)
-	png, err := qrcode.Encode(scanURL, qrcode.Medium, 256)
+	png, err := qrcode.Encode(handler.trackingURL(shipment.TrackingNumber), qrcode.Medium, 256)
 	if err != nil {
 		context.AbortWithStatus(http.StatusInternalServerError)
 		return

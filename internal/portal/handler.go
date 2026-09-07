@@ -356,8 +356,14 @@ func (h *Handler) scannedShipmentIdentifier(raw string) string {
 	if err != nil || parsed.Scheme != publicURL.Scheme || parsed.Host != publicURL.Host || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return value
 	}
-	const prefix = "/scan/shipment/"
-	if !strings.HasPrefix(parsed.EscapedPath(), prefix) {
+	prefix := ""
+	for _, candidate := range []string{"/scan/shipment/", "/track/"} {
+		if strings.HasPrefix(parsed.EscapedPath(), candidate) {
+			prefix = candidate
+			break
+		}
+	}
+	if prefix == "" {
 		return value
 	}
 	identifier, err := url.PathUnescape(strings.TrimPrefix(parsed.EscapedPath(), prefix))

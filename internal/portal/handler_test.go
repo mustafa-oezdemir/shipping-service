@@ -64,6 +64,9 @@ func TestScannedShipmentIdentifierAcceptsOnlyOwnOpaqueQRURL(t *testing.T) {
 	if got := handler.scannedShipmentIdentifier("https://pehlione-shipping.com/scan/shipment/shp_abc123"); got != "shp_abc123" {
 		t.Fatalf("opaque QR identifier = %q", got)
 	}
+	if got := handler.scannedShipmentIdentifier("https://pehlione-shipping.com/track/TRK-ABC123"); got != "TRK-ABC123" {
+		t.Fatalf("tracking QR identifier = %q", got)
+	}
 	foreign := "https://other.example/scan/shipment/shp_abc123"
 	if got := handler.scannedShipmentIdentifier(foreign); got != foreign {
 		t.Fatalf("foreign QR URL must not be accepted: %q", got)
