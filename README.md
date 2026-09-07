@@ -183,9 +183,7 @@ flowchart TD
     P["Shared Prometheus"] -->|"app:9091/metrics"| E["ecommerce-gin"]
     P -->|"shipping-app:9092/metrics"| S["shipping-service"]
     P --> G["Shared Grafana"]
-    G --> ED["Ecommerce Overview"]
-    G --> SD["Shipping Service Overview"]
-    G --> CD["E-Commerce + Shipping Overview"]
+    G --> D["PehliOne Monitoring: six dashboards"]
 ```
 
 Shipping exposes Prometheus metrics on the private `METRICS_PORT` listener. Compose uses `expose`, not a host `ports` mapping, so `/metrics` is reachable by Prometheus over `pehlione-backend` but is not served on the public application port. The public operational probes remain:
@@ -197,6 +195,7 @@ Key metric families include:
 
 - `shipping_http_*`: request count, status, duration and in-flight requests, labeled with Gin route templates rather than raw IDs.
 - `shipping_shipments_current`, `shipping_shipment_status_transitions_total`, `shipping_shipment_operations_total` and delivery-duration/failure metrics.
+- `shipping_shipments_delivered_today`, an aggregate UTC-day delivery gauge for the shared overview.
 - `shipping_returns_current`, `shipping_returns_created_total` and return transition metrics.
 - `shipping_ecommerce_callback_*`, `shipping_ecommerce_dependency_up`, `shipping_outbox_current`, `shipping_outbox_retry_total` and `shipping_outbox_oldest_pending_seconds`.
 - `shipping_api_auth_failures_total`, aggregate employee login results and aggregate QR scan results.
@@ -206,7 +205,10 @@ The shared configuration and provisioned assets live in the E-Commerce repositor
 
 - Prometheus scrape configuration: `monitoring/prometheus.yml`
 - alert rules: `monitoring/rules/shipping-alerts.yml`
-- dashboards: `monitoring/grafana/dashboards/shipping.json` and `platform-overview.json`
+- six dashboards in `monitoring/grafana/dashboards/`, provisioned into `PehliOne Monitoring`
+- the `PehliOne Operations` playlist, provisioned with a 15-second rotation by the E-Commerce Compose stack
+
+The dashboards use a five-second refresh and a last-15-minutes default window. They cover system overview, E-Commerce, Shipping, integration, infrastructure, and security/authentication. Start kiosk playback from **Dashboards → Playlists → PehliOne Operations** in Grafana at `http://localhost:3000`, then add `?kiosk` to the playback URL. Alert rules cover Shipping availability/readiness, HTTP errors and latency, callback dependency, outbox backlog/stalls/permanent failures, delivery failures, and service authentication spikes.
 
 Metrics contain aggregate controlled labels only. Tokens, cookies, request/event IDs, customer/order/shipment identifiers, tracking numbers, addresses, email addresses and employee IDs are not labels. Personnel-specific accountability remains in audit logs. In production, keep Prometheus and Grafana on an internal network, VPN or protected administrative endpoint; only the Shipping application belongs behind the public `https://pehlione-shipping.com` origin.
 - Container-to-container access: use Docker DNS such as `http://shipping-app:8090`

@@ -95,6 +95,22 @@ type StateCollector struct {
 	deliveredToday   *prometheus.Desc
 }
 
+var outboundShipmentStatuses = []models.ShipmentStatus{
+	models.StatusCreated, models.StatusLabelCreated, models.StatusReadyForPickup,
+	models.StatusAwaitingReceipt, models.StatusReceivedByShipping, models.StatusShipmentPrepared,
+	models.StatusInTransit, models.StatusArrivedDestinationHub, models.StatusOutForDelivery,
+	models.StatusDelivered, models.StatusDeliveryFailed, models.StatusDeliveryRescheduled,
+	models.StatusReturnToSenderRequested, models.StatusReturnToSenderPrepared,
+	models.StatusReturnToSenderInTransit, models.StatusReturnToSenderReceived, models.StatusCancelled,
+}
+
+var returnShipmentStatuses = []models.ShipmentStatus{
+	models.StatusReturnRequested, models.StatusReturnAuthorized, models.StatusReturnLabelCreated,
+	models.StatusWaitingCustomerHandover, models.StatusReturnReceivedByShipping,
+	models.StatusReturnPrepared, models.StatusReturnInTransit,
+	models.StatusReturnReceivedAtWarehouse, models.StatusReturnCompleted, models.StatusCancelled,
+}
+
 func NewStateCollector(database *gorm.DB) *StateCollector {
 	return &StateCollector{
 		database:         database,
@@ -127,15 +143,21 @@ func (collector *StateCollector) Collect(channel chan<- prometheus.Metric) {
 		Count    int64
 	}
 	if collector.database.WithContext(ctx).Model(&models.Shipment{}).Select("status, is_return, count(*) count").Group("status, is_return").Scan(&shipmentRows).Error == nil {
+		counts := make(map[string]int64, len(shipmentRows))
 		for _, row := range shipmentRows {
 			shipmentType := "outbound"
 			if row.IsReturn {
 				shipmentType = "return"
 			}
-			channel <- prometheus.MustNewConstMetric(collector.shipmentsCurrent, prometheus.GaugeValue, float64(row.Count), row.Status, shipmentType)
-			if row.IsReturn {
-				channel <- prometheus.MustNewConstMetric(collector.returnsCurrent, prometheus.GaugeValue, float64(row.Count), row.Status)
-			}
+			counts[shipmentType+"|"+row.Status] = row.Count
+		}
+		for _, status := range outboundShipmentStatuses {
+			channel <- prometheus.MustNewConstMetric(collector.shipmentsCurrent, prometheus.GaugeValue, float64(counts["outbound|"+string(status)]), string(status), "outbound")
+		}
+		for _, status := range returnShipmentStatuses {
+			count := counts["return|"+string(status)]
+			channel <- prometheus.MustNewConstMetric(collector.shipmentsCurrent, prometheus.GaugeValue, float64(count), string(status), "return")
+			channel <- prometheus.MustNewConstMetric(collector.returnsCurrent, prometheus.GaugeValue, float64(count), string(status))
 		}
 	}
 	var delivered int64
@@ -148,8 +170,12 @@ func (collector *StateCollector) Collect(channel chan<- prometheus.Metric) {
 		Count  int64
 	}
 	if collector.database.WithContext(ctx).Model(&models.OutboxEvent{}).Select("status, count(*) count").Group("status").Scan(&outboxRows).Error == nil {
+		counts := map[string]int64{}
 		for _, row := range outboxRows {
-			channel <- prometheus.MustNewConstMetric(collector.outboxCurrent, prometheus.GaugeValue, float64(row.Count), row.Status)
+			counts[row.Status] = row.Count
+		}
+		for _, status := range []models.OutboxStatus{models.OutboxStatusPending, models.OutboxStatusProcessing, models.OutboxStatusDelivered, models.OutboxStatusFailed} {
+			channel <- prometheus.MustNewConstMetric(collector.outboxCurrent, prometheus.GaugeValue, float64(counts[string(status)]), string(status))
 		}
 	}
 	var oldest models.OutboxEvent
