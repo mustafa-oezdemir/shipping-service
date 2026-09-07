@@ -19,6 +19,16 @@
 	</div>
 </nav>
 {{ end }}
+{{ define "public_nav" }}
+<nav class="public-nav" aria-label="Primary navigation">
+	<a class="brand" href="/">PehliOne Shipping</a>
+	<div>
+		<a href="#tracking-summary">Track Shipment</a>
+		<a href="/">Home</a>
+		<a class="nav-login" href="/login">Login</a>
+	</div>
+</nav>
+{{ end }}
 {{ define "activity_table" }}<table>
 	<thead>
 		<tr>

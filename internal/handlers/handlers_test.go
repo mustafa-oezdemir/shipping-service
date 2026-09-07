@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mustafa-oezdemir/shipping-service/internal/config"
@@ -14,6 +15,7 @@ import (
 	"github.com/mustafa-oezdemir/shipping-service/internal/models"
 	"github.com/mustafa-oezdemir/shipping-service/internal/services"
 	"github.com/mustafa-oezdemir/shipping-service/internal/testutil"
+	"github.com/mustafa-oezdemir/shipping-service/web"
 )
 
 func TestCreateShipmentRequiresServiceToken(t *testing.T) {
@@ -208,6 +210,51 @@ func TestGetShipmentForOrderOmitsRecipientPII(t *testing.T) {
 	}
 	if !bytes.Contains(response.Body.Bytes(), []byte("tracking_number")) {
 		t.Fatal("shipment lookup should expose tracking data")
+	}
+}
+
+func TestPublicTrackingUsesBrandedNavigationAndOmitsPII(t *testing.T) {
+	templates, err := web.ParseTemplates()
+	if err != nil {
+		t.Fatalf("parse templates: %v", err)
+	}
+	now := time.Date(2026, time.September, 7, 8, 30, 0, 0, time.UTC)
+	stops := 8
+	shipment := &models.Shipment{
+		TrackingNumber:     "RET-DE-20260907-SAFE01",
+		ExternalOrderID:    "private-order-63",
+		ExternalCustomerID: "private@example.com",
+		IsReturn:           true,
+		Status:             models.StatusReturnInTransit,
+		Recipient:          models.AddressSnapshot{Street: "Private Street", HouseNumber: "25", Phone: "+49-private-phone"},
+		RemainingStops:     &stops,
+		Events: []models.ShipmentEvent{{
+			Title:        "Return in transit",
+			Description:  "private@example.com Private Street 25 +49-private-phone",
+			Status:       models.StatusReturnInTransit,
+			LocationName: "Frankfurt Hub",
+			City:         "Frankfurt",
+			PostalCode:   "private-postal-code",
+			OccurredAt:   now,
+		}},
+	}
+	var output bytes.Buffer
+	if err := templates.ExecuteTemplate(&output, "tracking.tmpl", gin.H{"Tracking": newPublicTrackingView(shipment)}); err != nil {
+		t.Fatalf("render tracking template: %v", err)
+	}
+	body := output.String()
+	for _, expected := range []string{"PehliOne Shipping", "Track Shipment", `href="/login"`, "Return Shipment", shipment.TrackingNumber, "Frankfurt Hub", "8"} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("public tracking page does not contain %q", expected)
+		}
+	}
+	for _, privateValue := range []string{"private-order-63", "private@example.com", "Private Street", "+49-private-phone", "private-postal-code"} {
+		if strings.Contains(body, privateValue) {
+			t.Errorf("public tracking page exposed private value %q", privateValue)
+		}
+	}
+	if strings.Contains(body, "/admin") || strings.Contains(body, "/employee") {
+		t.Fatal("public tracking navigation exposed privileged links")
 	}
 }
 

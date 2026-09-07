@@ -1,30 +1,19 @@
-{{ define "tracking.tmpl" }}
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Track shipment</title><link rel="stylesheet" href="/static/site.css"></head>
-	<body>
-		<main>
-			<h1>Track shipment</h1>
-			<p class="tracking">{{ .Shipment.TrackingNumber }}</p>
-			<p>
-				<strong>{{ .Shipment.Status }}</strong>
-			</p>
-			{{ if .Shipment.EstimatedFrom }}
-				<p>Estimated delivery: {{ .Shipment.EstimatedFrom.Format "02 Jan 2006 15:04 MST" }}</p>
-			{{ end }}
-			{{ if .Shipment.RemainingStops }}
-				<p>{{ .Shipment.RemainingStops }} stops remaining</p>
-			{{ end }}
-			<h2>Timeline</h2>
-			<ol>
-				{{ range .Shipment.Events }}
-					<li>
-						<strong>{{ .Title }}</strong>
-						<br>
-						<small>{{ .OccurredAt.Format "02 Jan 2006 15:04 MST" }}</small>
-						{{ if .Description }}
-							<br>{{ .Description }}
-						{{ end }}</li>
-				{{ end }}</ol>
-		</main>
-	</body>
-</html>
-{{ end }}
+{{define "tracking.tmpl"}}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{.Tracking.ShipmentLabel}} | PehliOne Shipping</title><link rel="stylesheet" href="/static/site.css"></head><body class="tracking-page">
+	{{template "public_nav" .}}
+	<main class="tracking-main">
+		<header class="tracking-hero"><p class="eyebrow">PehliOne Shipping</p><h1>{{.Tracking.ShipmentLabel}}</h1><p class="muted">Follow the latest progress of your delivery.</p></header>
+		<section class="tracking-summary" id="tracking-summary" aria-labelledby="tracking-summary-title">
+			<h2 class="visually-hidden" id="tracking-summary-title">Tracking summary</h2>
+			<div class="summary-item summary-tracking"><span>Tracking Number</span><strong>{{.Tracking.TrackingNumber}}</strong></div>
+			<div class="summary-item"><span>Current Status</span><strong><span class="status-pill status-{{.Tracking.StatusClass}}">{{.Tracking.StatusLabel}}</span></strong></div>
+			<div class="summary-item"><span>Expected Delivery</span><strong>{{if .Tracking.EstimatedFrom}}{{.Tracking.EstimatedFrom.Format "02 Jan 2006 15:04"}}{{if .Tracking.EstimatedUntil}} – {{.Tracking.EstimatedUntil.Format "15:04 MST"}}{{end}}{{else}}To be announced{{end}}</strong></div>
+			<div class="summary-item"><span>Remaining Stops</span><strong>{{if .Tracking.RemainingStops}}{{.Tracking.RemainingStops}}{{else}}—{{end}}</strong></div>
+		</section>
+		<section class="tracking-card" aria-labelledby="timeline-title"><div class="section-heading"><div><p class="eyebrow">Progress</p><h2 id="timeline-title">Shipment Timeline</h2></div></div>
+			<ol class="public-timeline">{{range .Tracking.Events}}<li><span class="timeline-dot status-{{.StatusClass}}" aria-hidden="true"></span><div class="timeline-content"><div class="timeline-title"><strong>{{.Title}}</strong><span class="status-pill status-{{.StatusClass}}">{{.StatusLabel}}</span></div><time datetime="{{.OccurredAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.OccurredAt.Format "02 Jan 2006 15:04 MST"}}</time>{{if .Location}}<p>{{.Location}}</p>{{end}}</div></li>{{else}}<li class="timeline-empty"><div class="timeline-content"><strong>No tracking events yet</strong><p>Updates will appear here after the shipment enters the network.</p></div></li>{{end}}</ol>
+		</section>
+		<p class="privacy-note">For your privacy, public tracking shows delivery progress only.</p>
+	</main>
+</body></html>
+{{end}}

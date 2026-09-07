@@ -236,7 +236,73 @@ func (handler *Handler) PublicTracking(context *gin.Context) {
 		handler.respondError(context, err)
 		return
 	}
-	context.HTML(http.StatusOK, "tracking.tmpl", gin.H{"Shipment": shipment})
+	context.HTML(http.StatusOK, "tracking.tmpl", gin.H{"Tracking": newPublicTrackingView(shipment)})
+}
+
+type publicTrackingView struct {
+	TrackingNumber string
+	ShipmentLabel  string
+	StatusLabel    string
+	StatusClass    string
+	EstimatedFrom  *time.Time
+	EstimatedUntil *time.Time
+	RemainingStops *int
+	Events         []publicTrackingEvent
+}
+
+type publicTrackingEvent struct {
+	Title       string
+	StatusLabel string
+	StatusClass string
+	OccurredAt  time.Time
+	Location    string
+}
+
+func newPublicTrackingView(shipment *models.Shipment) publicTrackingView {
+	view := publicTrackingView{
+		TrackingNumber: shipment.TrackingNumber,
+		ShipmentLabel:  "Shipment",
+		StatusLabel:    statusLabel(shipment.Status),
+		StatusClass:    publicStatusClass(shipment.Status),
+		EstimatedFrom:  shipment.EstimatedFrom,
+		EstimatedUntil: shipment.EstimatedUntil,
+		RemainingStops: shipment.RemainingStops,
+		Events:         make([]publicTrackingEvent, 0, len(shipment.Events)),
+	}
+	if shipment.IsReturn {
+		view.ShipmentLabel = "Return Shipment"
+	}
+	for index := len(shipment.Events) - 1; index >= 0; index-- {
+		event := shipment.Events[index]
+		locationParts := make([]string, 0, 2)
+		if value := strings.TrimSpace(event.LocationName); value != "" {
+			locationParts = append(locationParts, value)
+		}
+		if value := strings.TrimSpace(event.City); value != "" && (len(locationParts) == 0 || !strings.EqualFold(locationParts[len(locationParts)-1], value)) {
+			locationParts = append(locationParts, value)
+		}
+		view.Events = append(view.Events, publicTrackingEvent{
+			Title:       event.Title,
+			StatusLabel: statusLabel(event.Status),
+			StatusClass: publicStatusClass(event.Status),
+			OccurredAt:  event.OccurredAt,
+			Location:    strings.Join(locationParts, ", "),
+		})
+	}
+	return view
+}
+
+func publicStatusClass(status models.ShipmentStatus) string {
+	switch status {
+	case models.StatusDelivered, models.StatusReturnCompleted, models.StatusReturnToSenderReceived:
+		return "success"
+	case models.StatusDeliveryFailed, models.StatusCancelled:
+		return "danger"
+	case models.StatusOutForDelivery, models.StatusDeliveryRescheduled, models.StatusWaitingCustomerHandover:
+		return "warning"
+	default:
+		return "info"
+	}
 }
 
 func (handler *Handler) InternalShipment(context *gin.Context) {
