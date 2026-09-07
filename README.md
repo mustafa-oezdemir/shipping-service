@@ -181,6 +181,26 @@ docker compose up --build
 
 - Host access: `http://localhost:8090`
 
+### Mage and Render builds
+
+The Mage build targets the Shipping server entry point directly and writes the
+production binary to `bin/server`:
+
+```bash
+go run github.com/magefile/mage@v1.15.0 -d . build
+go run github.com/magefile/mage@v1.15.0 -d . verify
+```
+
+For a Native Go Render service, use:
+
+```text
+Build Command: go run github.com/magefile/mage@v1.15.0 -d . build
+Start Command: ./bin/server
+```
+
+The application prefers Render's `PORT` and falls back to `APP_PORT` outside
+Render.
+
 ## Monitoring & Observability
 
 Shipping participates in the existing E-Commerce Prometheus/Grafana stack; this repository intentionally does not start a second monitoring stack.
