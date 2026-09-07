@@ -217,7 +217,7 @@ The shared configuration and provisioned assets live in the E-Commerce repositor
 
 The dashboards use a five-second refresh and a last-15-minutes default window. They cover system overview, E-Commerce, Shipping, integration, infrastructure, and security/authentication. Start kiosk playback from **Dashboards → Playlists → PehliOne Operations** in Grafana at `http://localhost:3000`, then add `?kiosk` to the playback URL. Alert rules cover Shipping availability/readiness, HTTP errors and latency, callback dependency, outbox backlog/stalls/permanent failures, delivery failures, and service authentication spikes.
 
-Metrics contain aggregate controlled labels only. Tokens, cookies, request/event IDs, customer/order/shipment identifiers, tracking numbers, addresses, email addresses and employee IDs are not labels. Personnel-specific accountability remains in audit logs. In production, keep Prometheus and Grafana on an internal network, VPN or protected administrative endpoint; only the Shipping application belongs behind the public `https://pehlione-shipping.com` origin.
+Metrics contain aggregate controlled labels only. Tokens, cookies, request/event IDs, customer/order/shipment identifiers, tracking numbers, addresses, email addresses and employee IDs are not labels. Personnel-specific accountability remains in audit logs. In a future production deployment, keep Prometheus and Grafana on an internal network, VPN or protected administrative endpoint; only the Shipping application belongs behind the planned public Shipping origin.
 - Container-to-container access: use Docker DNS such as `http://shipping-app:8090`
 - The separate development stacks share only the external `pehlione-backend` network.
 - Callback URLs target `http://ecommerce-app:8080`; they never use `localhost` inside a container.
@@ -225,6 +225,14 @@ Metrics contain aggregate controlled labels only. Tokens, cookies, request/event
 ## URL reference
 
 Shipping runs on port `8090`; the main E-Commerce application runs on port `8080`.
+
+| Environment | E-Commerce | Shipping |
+| --- | --- | --- |
+| Local browser | `http://localhost:8080` | `http://localhost:8090` |
+| Docker internal | `http://ecommerce-app:8080` | `http://shipping-app:8090` |
+| Planned production target | `https://pehlione-ecommerce.com` | `https://pehlione-shipping.com` |
+
+Production target URLs require a deployed server, DNS, reverse proxy, and valid TLS certificate. They are not documented as currently available endpoints.
 
 ### Local browser URLs
 
@@ -255,31 +263,34 @@ Resource URLs contain a real identifier:
 - Return detail: `http://localhost:8090/returns/{returnID}`
 - Admin user detail: `http://localhost:8090/admin/users/{userID}`
 
-### Internal API URLs
+### Internal Service API
 
-The local host API base URL is `http://localhost:8090/api/v1`. Calls require the service bearer token; write operations also require the documented idempotency and role headers.
+The Shipping API under `/api/v1/...` is intended for trusted service-to-service communication between `ecommerce-gin` and `shipping-service`. It is not a public browser API. Every call requires `Authorization: Bearer <API_TOKEN>`; write operations also require the documented idempotency and role headers. Missing or incorrect tokens return HTTP 401.
 
-- Create shipment: `POST http://localhost:8090/api/v1/shipments`
-- Shipment by tracking number: `GET http://localhost:8090/api/v1/shipments/{trackingNumber}`
-- Shipment events: `GET http://localhost:8090/api/v1/shipments/{trackingNumber}/events`
-- Shipment by E-Commerce order: `GET http://localhost:8090/api/v1/shipments/order/{orderID}`
-- Create return: `POST http://localhost:8090/api/v1/returns`
-- Return by tracking number: `GET http://localhost:8090/api/v1/returns/{trackingNumber}`
+- Create shipment: `POST /api/v1/shipments`
+- Shipment by tracking number: `GET /api/v1/shipments/{trackingNumber}`
+- Shipment events: `GET /api/v1/shipments/{trackingNumber}/events`
+- Shipment by E-Commerce order: `GET /api/v1/shipments/order/{orderID}`
+- Create return: `POST /api/v1/returns`
+- Return by tracking number: `GET /api/v1/returns/{trackingNumber}`
 
-When both applications run in Docker, E-Commerce must call `http://shipping-app:8090`; Shipping must call E-Commerce at `http://ecommerce-app:8080`. These Docker DNS names are not browser URLs.
+When both applications run in Docker—development or production—E-Commerce calls `http://shipping-app:8090`, and Shipping calls E-Commerce at `http://ecommerce-app:8080`. These Docker DNS names are private service addresses, not browser URLs. For explicit host-process debugging only, the Shipping API can be reached at `http://localhost:8090/api/v1` with the same authentication.
 
-### Production URLs
+Even if a future reverse proxy technically routes `/api/v1/...` on the public Shipping domain, the API remains private and token-protected. Service traffic should stay on the private Docker network instead of leaving the host and returning through the public domain.
 
-- Shipping portal and public tracking: <https://pehlione-shipping.com>
-- Personnel login: <https://pehlione-shipping.com/login>
-- Admin dashboard: <https://pehlione-shipping.com/admin/dashboard>
-- Main E-Commerce application: <https://pehlione-ecommerce.com>
+### Planned production URLs
 
-Production API paths use `https://pehlione-shipping.com/api/v1/...`. Keep the internal API protected by service authentication; it is not a public browser API.
+These targets become available only after production DNS/TLS deployment:
 
-## Production deployment
+- Shipping portal and tracking: `https://pehlione-shipping.com`
+- Personnel login: `https://pehlione-shipping.com/login`
+- Admin dashboard: `https://pehlione-shipping.com/admin/dashboard`
+- Public tracking: `https://pehlione-shipping.com/track/{trackingNumber}`
+- E-Commerce: `https://pehlione-ecommerce.com`
 
-The sibling `ecommerce-gin/docker-compose.production.yml` is the authoritative two-service production stack. It builds this repository, publishes Shipping at `https://pehlione-shipping.com` through Caddy, and does not expose port 8090 or the Shipping database on the host.
+## Planned production deployment
+
+The sibling `ecommerce-gin/docker-compose.production.yml` is the target two-service production stack. It can publish Shipping through Caddy after the target domains are deployed; it does not expose port 8090 or the Shipping database on the host.
 
 Production values are split by purpose:
 
@@ -288,6 +299,18 @@ Production values are split by purpose:
 - `ECOMMERCE_API_URL=http://ecommerce-app:8080` is private Docker traffic and derives the versioned callback endpoint.
 
 Use the sibling `ecommerce-gin/scripts/New-ProductionEnv.ps1` generator to create ignored `.env.production` files for both repositories with matching, cryptographically secure service tokens. The combined stack reads its secrets from `ecommerce-gin/.env.production`; replace its remaining `CHANGE_ME` ACME/SMTP values before deployment. DNS for both domains must point to the deployment host before Caddy can obtain certificates. See the E-Commerce README for deployment and `curl` verification commands.
+
+The planned routing is:
+
+```text
+Internet -> https://pehlione-ecommerce.com -> Caddy/Nginx -> ecommerce-app:8080
+Internet -> https://pehlione-shipping.com  -> Caddy/Nginx -> shipping-app:8090
+
+ecommerce-app -> http://shipping-app:8090/api/v1/... (Bearer token)
+shipping-app  -> http://ecommerce-app:8080/api/v1/internal/shipping/events (Bearer token)
+```
+
+Production domains require A/AAAA records pointing to the server, reachable TCP ports 80/443, a configured Caddy/Nginx reverse proxy, a valid TLS certificate, and production `APP_URL` values. Until those prerequisites are complete, use the local development URLs above.
 
 ## Verification commands
 
