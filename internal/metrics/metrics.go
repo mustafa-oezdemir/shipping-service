@@ -92,6 +92,7 @@ type StateCollector struct {
 	returnsCurrent   *prometheus.Desc
 	outboxCurrent    *prometheus.Desc
 	outboxOldest     *prometheus.Desc
+	deliveredToday   *prometheus.Desc
 }
 
 func NewStateCollector(database *gorm.DB) *StateCollector {
@@ -101,6 +102,7 @@ func NewStateCollector(database *gorm.DB) *StateCollector {
 		returnsCurrent:   prometheus.NewDesc("shipping_returns_current", "Current customer returns by status.", []string{"status"}, nil),
 		outboxCurrent:    prometheus.NewDesc("shipping_outbox_current", "Current outbox events by status.", []string{"status"}, nil),
 		outboxOldest:     prometheus.NewDesc("shipping_outbox_oldest_pending_seconds", "Age of the oldest pending outbox event.", nil, nil),
+		deliveredToday:   prometheus.NewDesc("shipping_shipments_delivered_today", "Outbound shipments in delivered status updated since the current UTC day began.", nil, nil),
 	}
 }
 
@@ -109,6 +111,7 @@ func (collector *StateCollector) Describe(channel chan<- *prometheus.Desc) {
 	channel <- collector.returnsCurrent
 	channel <- collector.outboxCurrent
 	channel <- collector.outboxOldest
+	channel <- collector.deliveredToday
 }
 
 func (collector *StateCollector) Collect(channel chan<- prometheus.Metric) {
@@ -134,6 +137,10 @@ func (collector *StateCollector) Collect(channel chan<- prometheus.Metric) {
 				channel <- prometheus.MustNewConstMetric(collector.returnsCurrent, prometheus.GaugeValue, float64(row.Count), row.Status)
 			}
 		}
+	}
+	var delivered int64
+	if collector.database.WithContext(ctx).Model(&models.Shipment{}).Where("is_return = ? AND status = ? AND updated_at >= ?", false, models.StatusDelivered, time.Now().UTC().Truncate(24*time.Hour)).Count(&delivered).Error == nil {
+		channel <- prometheus.MustNewConstMetric(collector.deliveredToday, prometheus.GaugeValue, float64(delivered))
 	}
 
 	var outboxRows []struct {

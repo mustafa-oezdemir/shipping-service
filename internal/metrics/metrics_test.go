@@ -44,6 +44,7 @@ func TestStateCollectorExportsAggregatesWithoutSensitiveData(t *testing.T) {
 		`shipping_returns_current{status="return_in_transit"} 1`,
 		`shipping_outbox_current{status="pending"} 1`,
 		"shipping_outbox_oldest_pending_seconds",
+		"shipping_shipments_delivered_today 0",
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("missing %q in metrics: %s", expected, body)
