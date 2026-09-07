@@ -243,9 +243,7 @@ func truncateError(err error) string {
 }
 
 func isTemporaryError(err error) bool {
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return netErr.Timeout() || netErr.Temporary()
-	}
-	return true
+	// Transport failures (including connection refused and DNS failures) are
+	// retryable. HTTP response codes are classified separately in deliverOne.
+	return !errors.Is(err, context.Canceled)
 }

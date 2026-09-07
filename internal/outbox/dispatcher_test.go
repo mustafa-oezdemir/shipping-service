@@ -2,6 +2,8 @@ package outbox
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +16,16 @@ import (
 	"github.com/mustafa-oezdemir/shipping-service/internal/services"
 	"github.com/mustafa-oezdemir/shipping-service/internal/testutil"
 )
+
+func TestConnectionRefusedIsRetryable(t *testing.T) {
+	err := &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
+	if !isTemporaryError(err) {
+		t.Fatal("connection refusal must remain pending for retry")
+	}
+	if isTemporaryError(context.Canceled) {
+		t.Fatal("canceled dispatcher context must not be retried")
+	}
+}
 
 func TestDispatcherRetriesAndMarksDelivered(t *testing.T) {
 	database := testutil.NewTestDB(t)

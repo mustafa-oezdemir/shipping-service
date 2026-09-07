@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -147,10 +146,10 @@ func (collector *StateCollector) Collect(channel chan<- prometheus.Metric) {
 		}
 	}
 	var oldest models.OutboxEvent
-	err := collector.database.WithContext(ctx).Select("created_at").Where("status = ?", models.OutboxStatusPending).Order("created_at ASC").First(&oldest).Error
-	if err == nil || errors.Is(err, gorm.ErrRecordNotFound) {
+	result := collector.database.WithContext(ctx).Select("created_at").Where("status = ?", models.OutboxStatusPending).Order("created_at ASC").Limit(1).Find(&oldest)
+	if result.Error == nil {
 		age := 0.0
-		if err == nil {
+		if result.RowsAffected > 0 {
 			age = max(0, time.Since(oldest.CreatedAt.UTC()).Seconds())
 		}
 		channel <- prometheus.MustNewConstMetric(collector.outboxOldest, prometheus.GaugeValue, age)
