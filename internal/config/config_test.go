@@ -25,6 +25,15 @@ func TestValidateInternalServiceURLAllowsHTTP(t *testing.T) {
 	}
 }
 
+func TestRenderPortTakesPrecedence(t *testing.T) {
+	t.Setenv("PORT", "10000")
+	t.Setenv("APP_PORT", "8090")
+
+	if got := firstNonEmptyEnv("PORT", "APP_PORT"); got != "10000" {
+		t.Fatalf("expected Render PORT, got %q", got)
+	}
+}
+
 func TestResolveDatabaseDSNPrecedence(t *testing.T) {
 	t.Setenv("DATABASE_DSN_DOCKER", "docker-dsn")
 	t.Setenv("DATABASE_DSN", "local-dsn")
