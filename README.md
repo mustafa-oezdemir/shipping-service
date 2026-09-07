@@ -1,5 +1,12 @@
 # NordShop Shipping & Returns Service
 
+![Go 1.26.5](https://img.shields.io/badge/GO-1.26.5-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+![Gin 1.12.0](https://img.shields.io/badge/GIN-1.12.0-008ECF?style=for-the-badge&logo=gin&logoColor=white)
+![MySQL 8.4](https://img.shields.io/badge/MYSQL-8.4-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![Docker Compose V2](https://img.shields.io/badge/DOCKER-COMPOSE_V2-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Prometheus](https://img.shields.io/badge/PROMETHEUS-METRICS-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/GRAFANA-SHARED_DASHBOARDS-F46800?style=for-the-badge&logo=grafana&logoColor=white)
+
 An independent Go/Gin logistics service for NordShop. It owns shipment tracking, delivery events, labels, QR codes, and operational logistics data. It does **not** read from or write to the e-commerce database.
 
 ## E-Commerce ↔ Shipping architecture
