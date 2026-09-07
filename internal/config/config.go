@@ -92,7 +92,7 @@ func Load() (Config, error) {
 	}
 	config := Config{
 		AppEnv:                     appEnv,
-		AppPort:                    environment("APP_PORT", "8090"),
+		AppPort:                    firstNonEmptyEnv("PORT", "APP_PORT"),
 		MetricsPort:                environment("METRICS_PORT", "9092"),
 		AppURL:                     validatedAppURL,
 		GinMode:                    strings.ToLower(environment("GIN_MODE", map[bool]string{true: "release", false: "debug"}[appEnv == "production"])),
@@ -128,6 +128,9 @@ func Load() (Config, error) {
 			City:        strings.TrimSpace(os.Getenv("WAREHOUSE_CITY")),
 			CountryCode: environment("WAREHOUSE_COUNTRY", "DE"),
 		},
+	}
+	if config.AppPort == "" {
+		config.AppPort = "8090"
 	}
 	if config.AppEnv != "development" && config.AppEnv != "test" && config.AppEnv != "production" {
 		return Config{}, errors.New("APP_ENV must be one of: development, test, production")
