@@ -11,11 +11,20 @@
 			<a href="/admin/users">Users</a>
 			<a href="/admin/audit">Audit</a>
 		{{ end }}
-		<a href="/profile">{{ .User.FirstName }} {{ .User.LastName }} <span class="badge">{{ .User.Role }}</span></a>
-		<form method="post" action="/logout" class="inline">
-			<input type="hidden" name="csrf_token" value="{{ .CSRF }}">
-			<button class="link" type="submit">Logout</button>
-		</form>
+		<details class="profile-menu">
+			<summary aria-label="Open profile menu">
+				<span>{{ .User.FirstName }} {{ .User.LastName }}</span>
+				<span class="badge">{{ .User.Role }}</span>
+				<span class="profile-menu-chevron" aria-hidden="true"></span>
+			</summary>
+			<div class="profile-dropdown">
+				<a href="/profile">Profile</a>
+				<form method="post" action="/logout">
+					<input type="hidden" name="csrf_token" value="{{ .CSRF }}">
+					<button class="dropdown-action" type="submit">Logout</button>
+				</form>
+			</div>
+		</details>
 	</div>
 </nav>
 {{ end }}
