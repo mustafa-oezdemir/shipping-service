@@ -1,7 +1,10 @@
 {{ define "portal_nav" }}
-<nav>
-	<a class="brand" href="/dashboard">Pehlione Shipping</a>
-	<div>
+<nav class="portal-nav">
+	<a class="brand" href="/dashboard">
+		<span class="brand-mark">P</span>
+		<span>Pehlione Shipping</span>
+	</a>
+	<div class="portal-nav-links">
 		<a href="/dashboard">Dashboard</a>
 		<a href="/shipments">Shipments</a>
 		<a href="/scan">QR Scanner</a>
@@ -13,12 +16,22 @@
 		{{ end }}
 		<details class="profile-menu">
 			<summary aria-label="Open profile menu">
-				<span>{{ .User.FirstName }} {{ .User.LastName }}</span>
-				<span class="badge">{{ .User.Role }}</span>
+				<span class="profile-nav-avatar">{{ .User.Initials }}</span>
+				<span class="profile-nav-name">{{ .User.FirstName }} {{ .User.LastName }}</span>
 				<span class="profile-menu-chevron" aria-hidden="true"></span>
 			</summary>
 			<div class="profile-dropdown">
-				<a href="/profile">Profile</a>
+				<div class="profile-dropdown-header">
+					<div class="profile-dropdown-avatar">{{ .User.Initials }}</div>
+					<div class="profile-dropdown-user">
+						<strong>{{ .User.FirstName }} {{ .User.LastName }}</strong>
+						<span class="profile-dropdown-email">{{ .User.Email }}</span>
+						<span class="badge profile-role">{{ .User.Role }}</span>
+					</div>
+				</div>
+				<div class="profile-dropdown-divider"></div>
+				<a href="/profile" class="profile-dropdown-link">Profile</a>
+				<div class="profile-dropdown-divider"></div>
 				<form method="post" action="/logout">
 					<input type="hidden" name="csrf_token" value="{{ .CSRF }}">
 					<button class="dropdown-action" type="submit">Logout</button>
